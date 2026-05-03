@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mortgage Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:380px 1fr;gap:1.25rem;align-items:start}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}}
+.controls{position:sticky;top:5rem;display:flex;flex-direction:column;gap:1rem}
+.right{display:flex;flex-direction:column;gap:1.25rem}
+/* Linked pair inputs */
+.pair{display:flex;gap:0.35rem;flex-wrap:wrap}.pair .input-wrap{flex:1;min-width:65px}
+/* Summary rows */
+.srow{display:flex;justify-content:space-between;align-items:baseline;padding:0.42rem 0;border-bottom:1px solid var(--bdr)}
+.srow:last-child{border-bottom:none}
+.srow-lbl{font-size:0.78rem;font-family:'DM Mono',monospace;color:var(--mut2)}
+.srow-val{font-size:0.85rem;font-weight:600;font-family:'DM Mono',monospace}
+.srow-total .srow-lbl{color:var(--txt);font-weight:700;font-size:0.88rem}
+.srow-total .srow-val{font-size:1.15rem;color:var(--grn)}
+/* Extra payments */
+.ep-row{display:grid;grid-template-columns:1fr 110px 100px auto;gap:0.4rem;align-items:center;margin-bottom:0.5rem}
+/* Table */
+.expand-btn{background:none;border:none;color:var(--mut);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.75rem;width:20px;text-align:center;padding:0;line-height:1;flex-shrink:0}
+.expand-btn:hover{color:var(--grn)}
+.month-group{display:none}
+.month-group.open{display:table-row-group}
+.month-group tr td{font-size:0.65rem;color:var(--mut)!important;padding:0.22rem 0.5rem;background:rgba(255,255,255,0.012)}
+/* Rate slider */
+.rate-wrap{display:flex;flex-direction:column;gap:0.35rem}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .ep-row{grid-template-columns:1fr 90px auto !important}
+  .pair{flex-wrap:wrap}
+  .pair .input-wrap{min-width:100px}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('mortgage')</script>
+
+<div class="page">
+  <!-- PAGE HEADER -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Mortgage Calculator</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">payment · amortization · PMI · property tax · insurance</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+      <button class="btn org" onclick="exportToDebt()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Send to Debt Tab
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: INPUTS -->
+    <div class="controls">
+
+      <!-- MORTGAGE DETAILS -->
+      <div class="panel">
+        <div class="sect-title">Mortgage Details</div>
+        <div style="display:flex;flex-direction:column;gap:0.7rem">
+
+          <div class="g2">
+            <div class="field">
+              <label>Home Value ($)</label>
+              <div class="input-wrap"><input type="number" id="home-val" value="" min="0" oninput="onHomeValChange()"><span class="unit">$</span></div>
+            </div>
+            <div class="field">
+              <label>Down Payment</label>
+              <div class="pair">
+                <div class="input-wrap"><input type="number" id="down-pct" value="" min="0" max="100" step="0.01" oninput="onDownPctChange()"><span class="unit">%</span></div>
+                <div class="input-wrap"><input type="number" id="down-amt" value="" min="0" oninput="onDownAmtChange()"><span class="unit">$</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="g2">
+            <div class="field">
+              <label>Mortgage Amount ($)</label>
+              <div class="input-wrap"><input type="number" id="mortgage-amt" value="" min="0" oninput="onMortgageAmtChange()"><span class="unit">$</span></div>
+            </div>
+            <div class="field">
+              <label>Interest Rate (%)</label>
+              <div class="rate-wrap">
+                <div class="input-wrap"><input type="number" id="rate" value="" min="0.1" max="20" step="0.125" oninput="onRateInput()"><span class="unit">%</span></div>
+                <input type="range" id="rate-slider" min="1" max="12" step="0.125" value="6" oninput="onRateSlider()">
+              </div>
+            </div>
+          </div>
+
+          <div class="g2">
+            <div class="field">
+              <label>Amortization</label>
+              <div class="pair">
+                <div class="input-wrap"><input type="number" id="amort-yr" value="30" min="1" max="40" oninput="render()"><span class="unit">Yr</span></div>
+                <div class="input-wrap"><input type="number" id="amort-mo" value="0" min="0" max="11" oninput="render()"><span class="unit">Mo</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Start Date</label>
+              <input type="date" id="start-date" class="input-bare" oninput="render()">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- HOMEOWNER EXPENSES -->
+      <div class="panel">
+        <div class="sect-title">Homeowner Expenses</div>
+        <div style="display:flex;flex-direction:column;gap:0.7rem">
+
+          <div class="g2">
+            <div class="field">
+              <label>One-time Expenses</label>
+              <div class="pair">
+                <div class="input-wrap" style="max-width:90px"><input type="number" id="onetime-pct" value="" min="0" step="0.01" oninput="onOneTimePctChange()"><span class="unit">%</span></div>
+                <div class="input-wrap"><input type="number" id="onetime-amt" value="" min="0" oninput="onOneTimeAmtChange()"><span class="unit">$</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Property Tax / yr</label>
+              <div class="pair">
+                <div class="input-wrap" style="max-width:90px"><input type="number" id="tax-pct" value="" min="0" step="0.01" oninput="onTaxPctChange()"><span class="unit">%</span></div>
+                <div class="input-wrap"><input type="number" id="tax-amt" value="" min="0" oninput="onTaxAmtChange()"><span class="unit">$</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="g2">
+            <div class="field">
+              <label>Home Insurance / yr</label>
+              <div class="pair">
+                <div class="input-wrap" style="max-width:90px"><input type="number" id="ins-pct" value="" min="0" step="0.001" oninput="onInsPctChange()"><span class="unit">%</span></div>
+                <div class="input-wrap"><input type="number" id="ins-amt" value="" min="0" oninput="onInsAmtChange()"><span class="unit">$</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>HOA Fees / mo</label>
+              <div class="input-wrap"><input type="number" id="hoa" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>PMI Rate / yr (auto-removes at 80% LTV)</label>
+            <div class="input-wrap"><input type="number" id="pmi-rate" value="0.625" min="0" step="0.001" oninput="render()"><span class="unit">%</span></div>
+            <div id="pmi-note" style="font-size:0.67rem;font-family:'DM Mono',monospace;color:var(--tel);margin-top:0.3rem"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- EXTRA PAYMENTS -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="sect-title" style="margin:0">Extra Payments</div>
+          <button class="btn grn" onclick="addExtraPayment()" style="padding:0.28rem 0.6rem;font-size:0.65rem">+ Add</button>
+        </div>
+        <div id="ep-list"></div>
+        <div style="font-size:0.67rem;font-family:'DM Mono',monospace;color:var(--mut)">Extra payments applied monthly to principal, reducing total interest and loan term.</div>
+      </div>
+
+    </div><!-- /controls -->
+
+    <!-- RIGHT: RESULTS -->
+    <div class="right">
+
+      <!-- STAT CARDS -->
+      <div class="g4">
+        <div class="card grn"><div class="card-lb">Monthly P&amp;I</div><div class="card-v" id="st-pi">—</div><div class="card-s">principal + interest</div></div>
+        <div class="card blu"><div class="card-lb">Total Monthly</div><div class="card-v" id="st-monthly">—</div><div class="card-s">all costs included</div></div>
+        <div class="card amb"><div class="card-lb">Total Interest</div><div class="card-v" id="st-interest">—</div><div class="card-s">over loan life</div></div>
+        <div class="card red"><div class="card-lb">Total Cost</div><div class="card-v" id="st-cost">—</div><div class="card-s">everything combined</div></div>
+      </div>
+
+      <!-- MONTHLY BREAKDOWN -->
+      <div class="panel">
+        <div class="sect-title">Monthly Payment Breakdown</div>
+        <div id="monthly-breakdown"></div>
+      </div>
+
+      <!-- DONUT + TOTALS SIDE BY SIDE -->
+      <div class="panel">
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:2rem;align-items:center">
+          <div style="position:relative;height:200px">
+            <canvas id="donut-chart" role="img" aria-label="Total payment breakdown donut chart"></canvas>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+              <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.08em">Total of all</div>
+              <div style="font-size:0.7rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.08em">Payments</div>
+            </div>
+          </div>
+          <div id="totals-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- AMORTIZATION CHART -->
+      <div class="panel">
+        <div class="sect-title" id="chart-title">Mortgage Payment Schedule</div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#4ade80;display:inline-block"></span>Principal</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#fb923c;display:inline-block"></span>Interest</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#a78bfa;display:inline-block"></span>Taxes, PMI, Ins &amp; Fees</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:3px;background:#ef4444;display:inline-block"></span>Balance</span>
+        </div>
+        <div style="position:relative;width:100%;height:320px"><canvas id="amort-chart" role="img" aria-label="Annual mortgage amortization chart"></canvas></div>
+      </div>
+
+      <!-- AMORTIZATION TABLE -->
+      <div class="panel">
+        <div class="sect-title">Mortgage Payment Schedule <span id="sched-dates" style="font-weight:400;color:var(--mut);font-size:0.7rem"></span></div>
+        <div class="table-wrap">
+          <table id="amort-table">
+            <thead>
+              <tr>
+                <th style="text-align:left;min-width:70px">Year</th>
+                <th style="color:#4ade80">Principal (A)</th>
+                <th style="color:#fb923c">Interest (B)</th>
+                <th style="color:#a78bfa">Tax/PMI/Ins (C)</th>
+                <th>Total (A+B+C)</th>
+                <th>Balance</th>
+                <th>Loan Paid %</th>
+              </tr>
+            </thead>
+            <tbody id="amort-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /right -->
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// MATH ENGINE
+// All results verified against reference screenshot:
+// $308k / 6% / 360mo = $1,846.62 P&I, $2,473.70 total monthly
+// ============================================================
+
+function calcPI(principal, annualRate, months) {
+  if (principal <= 0) return 0;
+  if (annualRate === 0) return principal / months;
+  const r = annualRate / 100 / 12;
+  return principal * (r * Math.pow(1+r, months)) / (Math.pow(1+r, months) - 1);
+}
+
+function buildAmortization(principal, annualRate, totalMonths, homeVal, pmiRatePct, startDateStr, extraPayments) {
+  const r       = annualRate / 100 / 12;
+  const basePI  = calcPI(principal, annualRate, totalMonths);
+  let   balance = principal;
+  const rows    = [];
+  const date    = new Date(startDateStr + 'T12:00:00');
+  const pmiThreshold = homeVal * 0.80;
+
+  for (let m = 0; m < totalMonths * 2 && balance > 0.005; m++) {
+    const interest = balance * r;
+
+    // Extra payment for this month (monthly type always; yearly only in January)
+    let extra = 0;
+    extraPayments.forEach(ep => {
+      if (ep.type === 'monthly') extra += ep.amount;
+      else if (ep.type === 'yearly' && date.getMonth() === 0) extra += ep.amount;
+      else if (ep.type === 'onetime' && m === ep.startMonth) extra += ep.amount;
+    });
+
+    let principalPaid = (basePI - interest) + extra;
+    if (principalPaid > balance) principalPaid = balance;
+    if (principalPaid < 0)       principalPaid = 0;
+
+    // PMI only when balance > 80% of home value
+    const pmi = (balance > pmiThreshold) ? (balance * pmiRatePct / 100 / 12) : 0;
+
+    balance = Math.max(0, balance - principalPaid);
+
+    rows.push({
+      month:    m + 1,
+      year:     date.getFullYear(),
+      date:     new Date(date),
+      principal: principalPaid,
+      interest,
+      pmi,
+      extra,
+      balance,
+    });
+
+    date.setMonth(date.getMonth() + 1);
+    if (balance < 0.005) break;
+  }
+
+  return { basePI, rows };
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let extraPayments = [];
+let nextEpId = 1;
+let donutChart = null;
+let amortChart = null;
+
+// ── LINKED INPUT HELPERS ──────────────────────────────────
+function getV(id) { return parseFloat(document.getElementById(id).value) || 0; }
+function setV(id, v, decimals=2) { document.getElementById(id).value = decimals === 0 ? Math.round(v) : parseFloat(v.toFixed(decimals)); }
+
+function onHomeValChange() {
+  const hv = getV('home-val');
+  const dp = getV('down-pct');
+  const da = Math.round(hv * dp / 100);
+  setV('down-amt', da, 0);
+  setV('mortgage-amt', Math.max(0, hv - da), 0);
+  setV('tax-amt',  Math.round(hv * getV('tax-pct') / 100), 0);
+  setV('ins-amt',  Math.round(hv * getV('ins-pct') / 100), 0);
+  setV('onetime-amt', Math.round(hv * getV('onetime-pct') / 100), 0);
+  render();
+}
+function onDownPctChange() {
+  const hv = getV('home-val');
+  const da = Math.round(hv * getV('down-pct') / 100);
+  setV('down-amt', da, 0);
+  setV('mortgage-amt', Math.max(0, hv - da), 0);
+  render();
+}
+function onDownAmtChange() {
+  const hv = getV('home-val');
+  const da = getV('down-amt');
+  setV('down-pct', hv > 0 ? (da / hv * 100) : 0, 3);
+  setV('mortgage-amt', Math.max(0, hv - da), 0);
+  render();
+}
+function onMortgageAmtChange() {
+  const hv = getV('home-val');
+  const ma = getV('mortgage-amt');
+  const da = Math.max(0, hv - ma);
+  setV('down-amt', da, 0);
+  setV('down-pct', hv > 0 ? (da / hv * 100) : 0, 3);
+  render();
+}
+function onRateInput()  { setV('rate-slider', getV('rate'), 3); render(); }
+function onRateSlider() { setV('rate', getV('rate-slider'), 3); render(); }
+function onTaxPctChange()     { setV('tax-amt',     Math.round(getV('home-val') * getV('tax-pct') / 100), 0); render(); }
+function onTaxAmtChange()     { const hv=getV('home-val'); setV('tax-pct',     hv>0?getV('tax-amt')/hv*100:0, 4); render(); }
+function onInsPctChange()     { setV('ins-amt',     Math.round(getV('home-val') * getV('ins-pct') / 100), 0); render(); }
+function onInsAmtChange()     { const hv=getV('home-val'); setV('ins-pct',     hv>0?getV('ins-amt')/hv*100:0, 4); render(); }
+function onOneTimePctChange() { setV('onetime-amt', Math.round(getV('home-val') * getV('onetime-pct') / 100), 0); render(); }
+function onOneTimeAmtChange() { const hv=getV('home-val'); setV('onetime-pct', hv>0?getV('onetime-amt')/hv*100:0, 4); render(); }
+
+// ── EXTRA PAYMENTS ────────────────────────────────────────
+function addExtraPayment() {
+  extraPayments.push({ id: nextEpId++, amount: 100, type: 'monthly' });
+  renderExtraPayments();
+  render();
+}
+function removeEP(id) { extraPayments = extraPayments.filter(e => e.id !== id); renderExtraPayments(); render(); }
+function setEP(id, key, val) { const ep = extraPayments.find(e => e.id === id); if (ep) { ep[key] = val; render(); } }
+
+function renderExtraPayments() {
+  const list = document.getElementById('ep-list');
+  list.innerHTML = '';
+  extraPayments.forEach(ep => {
+    const div = document.createElement('div');
+    div.className = 'ep-row';
+    div.innerHTML = `
+      <div style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--mut2)">Extra payment</div>
+      <div class="input-wrap"><input type="number" value="${ep.amount}" min="0" oninput="setEP(${ep.id},'amount',+this.value||0)"><span class="unit">$</span></div>
+      <select class="input-bare" onchange="setEP(${ep.id},'type',this.value)">
+        <option value="monthly"  ${ep.type==='monthly'?'selected':''}>Monthly</option>
+        <option value="yearly"   ${ep.type==='yearly'?'selected':''}>Yearly (Jan)</option>
+      </select>
+      <button class="btn red" style="padding:0.3rem 0.5rem" onclick="removeEP(${ep.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  const homeVal    = getV('home-val');
+  const mortAmt    = getV('mortgage-amt');
+  const rate       = getV('rate');
+  const amortYr    = getV('amort-yr');
+  const amortMo    = getV('amort-mo');
+  const totalMonths = Math.round(amortYr * 12 + amortMo);
+  const startDate  = document.getElementById('start-date').value || new Date().toISOString().split('T')[0];
+  const taxAmt     = getV('tax-amt');
+  const insAmt     = getV('ins-amt');
+  const hoa        = getV('hoa');
+  const pmiRate    = getV('pmi-rate');
+  const onetimeAmt = getV('onetime-amt');
+  const downAmt    = getV('down-amt');
+
+  if (mortAmt <= 0 || totalMonths <= 0) return;
+
+  const { basePI, rows } = buildAmortization(
+    mortAmt, rate, totalMonths, homeVal, pmiRate, startDate, extraPayments
+  );
+
+  // Monthly fixed costs
+  const monthlyTax = taxAmt / 12;
+  const monthlyIns = insAmt / 12;
+  const month1PMI  = rows.length > 0 ? rows[0].pmi : 0;
+  const monthlyExtra = extraPayments.filter(e=>e.type==='monthly').reduce((s,e)=>s+e.amount,0);
+  const totalMonthly = basePI + monthlyExtra + monthlyTax + monthlyIns + month1PMI + hoa;
+
+  // Loan-life totals
+  const totalPrincipal = rows.reduce((s,r) => s + r.principal, 0);
+  const totalInterest  = rows.reduce((s,r) => s + r.interest,  0);
+  const totalPMI       = rows.reduce((s,r) => s + r.pmi,       0);
+  const totalExtras    = rows.reduce((s,r) => s + r.extra,     0);
+  const loanMonths     = rows.length;
+  const totalTaxIns    = (taxAmt + insAmt) * (loanMonths / 12) + hoa * loanMonths + totalPMI;
+  const grandTotal     = totalPrincipal + totalInterest + totalTaxIns + downAmt + onetimeAmt;
+
+  // PMI info
+  const pmiThreshold = homeVal * 0.80;
+  let pmiNote = '';
+  if (mortAmt <= pmiThreshold) {
+    pmiNote = 'No PMI — LTV already at or below 80%';
+  } else {
+    const pmiStopIdx = rows.findIndex((r, i) => r.pmi === 0 && i > 0 && rows[i-1].pmi > 0);
+    if (pmiStopIdx >= 0) {
+      const stopDate = rows[pmiStopIdx].date.toLocaleDateString('en-US', {month:'short',year:'numeric'});
+      pmiNote = `PMI removes ${stopDate} when balance reaches 80% LTV ($${Math.round(pmiThreshold).toLocaleString()})`;
+    } else {
+      pmiNote = 'PMI applies for loan life (LTV never reaches 80%)';
+    }
+  }
+  document.getElementById('pmi-note').textContent = pmiNote;
+
+  // ── Stat cards
+  document.getElementById('st-pi').textContent      = fL2(basePI);
+  document.getElementById('st-monthly').textContent = fL2(totalMonthly);
+  document.getElementById('st-interest').textContent = fS(totalInterest);
+  document.getElementById('st-cost').textContent    = fS(grandTotal);
+
+  // ── Monthly breakdown panel
+  const pmiStopIdx2 = rows.findIndex((r,i) => r.pmi===0 && i>0 && rows[i-1].pmi>0);
+  const pmiDateStr  = pmiStopIdx2>=0 ? rows[pmiStopIdx2].date.toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '';
+  document.getElementById('monthly-breakdown').innerHTML = `
+    <div class="srow"><span class="srow-lbl">Monthly Principal &amp; Interest</span><span class="srow-val">${fL2(basePI)}</span></div>
+    <div class="srow"><span class="srow-lbl">Monthly Extra Payment</span><span class="srow-val">${fL2(monthlyExtra)}</span></div>
+    <div class="srow"><span class="srow-lbl">Property Taxes</span><span class="srow-val">${fL2(monthlyTax)}</span></div>
+    <div class="srow"><span class="srow-lbl">Homeowner's Insurance</span><span class="srow-val">${fL2(monthlyIns)}</span></div>
+    <div class="srow"><span class="srow-lbl">PMI${pmiDateStr?' (till '+pmiDateStr+')':''}</span><span class="srow-val">${fL2(month1PMI)}</span></div>
+    <div class="srow"><span class="srow-lbl">HOA Fees</span><span class="srow-val">${fL2(hoa)}</span></div>
+    <div class="srow srow-total"><span class="srow-lbl">Total Monthly Payment</span><span class="srow-val">${fL2(totalMonthly)}</span></div>
+  `;
+
+  // ── Totals breakdown panel
+  document.getElementById('totals-breakdown').innerHTML = `
+    <div class="srow"><span class="srow-lbl">Down Payment &amp; One-time Expenses</span><span class="srow-val">${fL2(downAmt + onetimeAmt)}</span></div>
+    <div class="srow"><span class="srow-lbl">Principal</span><span class="srow-val">${fL2(mortAmt)}</span></div>
+    <div class="srow"><span class="srow-lbl">Extra Payments</span><span class="srow-val">${fL2(totalExtras)}</span></div>
+    <div class="srow"><span class="srow-lbl">Interest</span><span class="srow-val" style="color:var(--amb)">${fL2(totalInterest)}</span></div>
+    <div class="srow"><span class="srow-lbl">Taxes, PMI, Insurance &amp; Fees</span><span class="srow-val">${fL2(totalTaxIns)}</span></div>
+    <div class="srow srow-total"><span class="srow-lbl">Total of all Payments</span><span class="srow-val">${fL2(grandTotal)}</span></div>
+  `;
+
+  // ── Donut chart
+  const donutData   = [downAmt + onetimeAmt, mortAmt, totalExtras, totalInterest, totalTaxIns].map(v => Math.max(0,v));
+  const donutColors = ['#c084fc', '#4ade80', '#2dd4bf', '#fb923c', '#a78bfa'];
+  const donutLabels = ['Down+One-time','Principal','Extra Payments','Interest','Tax/PMI/Ins'];
+  if (donutChart) {
+    donutChart.data.datasets[0].data = donutData;
+    donutChart.update('none');
+  } else {
+    donutChart = new Chart(document.getElementById('donut-chart'), {
+      type: 'doughnut',
+      data: { labels: donutLabels, datasets:[{ data: donutData, backgroundColor: donutColors, borderWidth: 0, hoverOffset: 4 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fL2(ctx.raw)} (${grandTotal>0?(ctx.raw/grandTotal*100).toFixed(1):0}%)` } }
+        }
+      }
+    });
+  }
+
+  // ── Build yearly summary for chart + table
+  const yearMap = {};
+  rows.forEach(r => {
+    const yr = r.year;
+    if (!yearMap[yr]) yearMap[yr] = { principal:0, interest:0, taxFees:0, balance:0, months:[] };
+    const ytaxFee = monthlyTax + monthlyIns + hoa + r.pmi;
+    yearMap[yr].principal += r.principal;
+    yearMap[yr].interest  += r.interest;
+    yearMap[yr].taxFees   += ytaxFee;
+    yearMap[yr].balance    = r.balance;
+    yearMap[yr].months.push(r);
+  });
+  const years = Object.keys(yearMap);
+
+  // ── Amortization bar chart (principal + interest + taxFees stacked, balance line)
+  const chartLabels  = years;
+  const chartPrin    = years.map(y => Math.round(yearMap[y].principal));
+  const chartInt     = years.map(y => Math.round(yearMap[y].interest));
+  const chartFees    = years.map(y => Math.round(yearMap[y].taxFees));
+  const chartBal     = years.map(y => Math.round(yearMap[y].balance));
+
+  if (amortChart) {
+    amortChart.data.labels = chartLabels;
+    amortChart.data.datasets[0].data = chartPrin;
+    amortChart.data.datasets[1].data = chartInt;
+    amortChart.data.datasets[2].data = chartFees;
+    amortChart.data.datasets[3].data = chartBal;
+    amortChart.update('none');
+  } else {
+    amortChart = new Chart(document.getElementById('amort-chart'), {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          { label:'Principal',       data:chartPrin,  backgroundColor:'#4ade80', stack:'pay', yAxisID:'y' },
+          { label:'Interest',        data:chartInt,   backgroundColor:'#fb923c', stack:'pay', yAxisID:'y' },
+          { label:'Tax/PMI/Ins',     data:chartFees,  backgroundColor:'#a78bfa', stack:'pay', yAxisID:'y' },
+          { label:'Balance',         data:chartBal,   type:'line', borderColor:'#ef4444', backgroundColor:'transparent',
+            pointRadius:2, pointHoverRadius:4, yAxisID:'y2', tension:0.3, stack: undefined },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 150 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { mode:'index', intersect:false, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fL2(ctx.raw)}` } }
+        },
+        scales: {
+          x: { stacked:true, ticks:{ color:'#6b7280', font:{family:'DM Mono',size:10}, maxRotation:45, autoSkip:true, maxTicksLimit:15 }, grid:{ color:'rgba(255,255,255,0.04)' } },
+          y: { stacked:true, position:'left', ticks:{ callback:v=>fS(v), color:'#9ca3af', font:{family:'DM Mono',size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } },
+          y2:{ position:'right', ticks:{ callback:v=>fS(v), color:'#ef4444', font:{family:'DM Mono',size:10} }, grid:{ drawOnChartArea:false } }
+        }
+      }
+    });
+  }
+
+  // ── Chart title with date range
+  if (rows.length > 0) {
+    const startD = rows[0].date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const endD   = rows[rows.length-1].date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    document.getElementById('chart-title').textContent  = `Mortgage Payment Schedule`;
+    document.getElementById('sched-dates').textContent  = `(${startD} — ${endD})`;
+  }
+
+  // ── Amortization table
+  const tbody = document.getElementById('amort-tbody');
+  tbody.innerHTML = '';
+
+  years.forEach(yr => {
+    const yd = yearMap[yr];
+    const ytax = yd.taxFees;
+    const pctPaid = mortAmt > 0 ? ((mortAmt - yd.balance) / mortAmt * 100).toFixed(2) : '0.00';
+    const groupId = 'yr-' + yr;
+
+    // Year row
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => toggleYear(groupId);
+    tr.innerHTML = `
+      <td><span class="expand-btn">⊕</span> ${yr}</td>
+      <td style="color:#4ade80">${fL2(yd.principal)}</td>
+      <td style="color:#fb923c">${fL2(yd.interest)}</td>
+      <td style="color:#a78bfa">${fL2(ytax)}</td>
+      <td>${fL2(yd.principal + yd.interest + ytax)}</td>
+      <td>${fL2(yd.balance)}</td>
+      <td>${pctPaid}%</td>
+    `;
+    tbody.appendChild(tr);
+
+    // Monthly rows (hidden, revealed by toggle)
+    const monthGroup = document.createElement('tbody');
+    monthGroup.id        = groupId;
+    monthGroup.className = 'month-group';
+    yd.months.forEach(mr => {
+      const mtr = document.createElement('tr');
+      const mtax = monthlyTax + monthlyIns + hoa + mr.pmi;
+      mtr.innerHTML = `
+        <td style="padding-left:1.75rem">${mr.date.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</td>
+        <td>${fL2(mr.principal)}</td>
+        <td>${fL2(mr.interest)}</td>
+        <td>${fL2(mtax)}</td>
+        <td>${fL2(mr.principal + mr.interest + mtax)}</td>
+        <td>${fL2(mr.balance)}</td>
+        <td>—</td>
+      `;
+      monthGroup.appendChild(mtr);
+    });
+    tbody.appendChild(monthGroup);
+  });
+
+  // Update net worth widget
+  updateNetWorth({
+    home_value:             homeVal,
+    home_mortgage_balance:  rows.length > 0 ? rows[rows.length-1].balance : mortAmt
+  });
+}
+
+function toggleYear(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('open');
+  // Update the ⊕ button text for the parent row
+  const tr = el.previousElementSibling;
+  if (tr) {
+    const btn = tr.querySelector('.expand-btn');
+    if (btn) btn.textContent = el.classList.contains('open') ? '⊖' : '⊕';
+  }
+}
+
+// ── EXPORT TO DEBT TAB ────────────────────────────────────
+function exportToDebt() {
+  const mortAmt  = getV('mortgage-amt');
+  const rate     = getV('rate');
+  const amortYr  = getV('amort-yr');
+  const taxAmt   = getV('tax-amt');
+  const insAmt   = getV('ins-amt');
+  const hoa      = getV('hoa');
+  const homeVal  = getV('home-val');
+  const pmiRate  = getV('pmi-rate');
+  const totalMo  = Math.round(amortYr * 12 + getV('amort-mo'));
+  const basePI   = calcPI(mortAmt, rate, totalMo);
+  const pmi0     = (mortAmt / (homeVal||1) > 0.80) ? mortAmt * pmiRate / 100 / 12 : 0;
+  const fullMoPay = basePI + taxAmt/12 + insAmt/12 + pmi0 + hoa;
+
+  storeSave('fin_mortgage_export', {
+    name:           'Mortgage',
+    balance:        mortAmt,
+    apr:            rate,
+    monthlyPayment: fullMoPay,
+    piOnly:         basePI,
+    homeValue:      homeVal,
+    type:           amortYr + '-year',
+    exportedAt:     new Date().toISOString()
+  });
+
+  const btn = document.querySelector('.btn.org');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '✓ Sent';
+  btn.style.color = 'var(--grn)';
+  setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────
+const FIELD_IDS = ['home-val','down-pct','down-amt','mortgage-amt','rate','amort-yr','amort-mo',
+  'start-date','tax-pct','tax-amt','ins-pct','ins-amt','hoa','pmi-rate','onetime-pct','onetime-amt'];
+
+function doSave() {
+  const state = { _extras: extraPayments, _nextEpId: nextEpId };
+  FIELD_IDS.forEach(id => { const el = document.getElementById(id); if (el) state[id] = el.value; });
+  storeSave(KEYS.mortgage, state);
+  showSaveConfirm();
+}
+
+function loadSaved() {
+  const state = storeLoad(KEYS.mortgage);
+  if (!state) return;
+  FIELD_IDS.forEach(id => { const el = document.getElementById(id); if (el && state[id] !== undefined) el.value = state[id]; });
+  if (state._extras)   { extraPayments = state._extras; renderExtraPayments(); }
+  if (state._nextEpId) nextEpId = state._nextEpId;
+  // Sync rate slider
+  document.getElementById('rate-slider').value = document.getElementById('rate').value;
+}
+
+// ── EXPORT PDF ────────────────────────────────────────────
+function doExport() {
+  const C = { dark:'#111827', muted:'#64748b', bg:'#f8fafc', border:'#e2e8f0',
+              grn:'#16a34a', amb:'#d97706', vio:'#7c3aed', red:'#dc2626', blu:'#2563eb' };
+  const css = `*{box-sizing:border-box}body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:8.5pt;color:${C.dark}}
+    h1{font-size:15pt;font-weight:700;border-bottom:2px solid ${C.dark};padding-bottom:3mm;margin-bottom:5mm}
+    h2{font-size:9.5pt;font-weight:700;margin:4mm 0 2mm;border-bottom:1px solid ${C.border};padding-bottom:1mm}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:4mm}
+    .card{background:${C.bg};border:1px solid ${C.border};border-radius:3px;padding:2.5mm;position:relative;overflow:hidden}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+    .card.grn::before{background:${C.grn}}.card.blu::before{background:${C.blu}}.card.amb::before{background:${C.amb}}.card.red::before{background:${C.red}}
+    .card-lb{font-size:6pt;color:${C.muted};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1mm}
+    .card-v{font-size:12pt;font-weight:700;letter-spacing:-0.02em}
+    .card.grn .card-v{color:${C.grn}}.card.blu .card-v{color:${C.blu}}.card.amb .card-v{color:${C.amb}}.card.red .card-v{color:${C.red}}
+    .srow{display:flex;justify-content:space-between;border-bottom:0.5px solid ${C.border};padding:1.5mm 0;font-size:8pt}
+    .srow-lbl{color:${C.muted}}.srow-val{font-weight:600}
+    .srow-total .srow-lbl{color:${C.dark};font-weight:700}.srow-total .srow-val{color:${C.grn};font-size:10pt}
+    table{width:100%;border-collapse:collapse;font-size:7pt}
+    th{text-align:right;padding:1.5mm 2mm;border-bottom:1px solid ${C.dark};color:${C.muted};font-size:6.5pt;text-transform:uppercase;font-weight:600}
+    th:first-child{text-align:left}
+    td{text-align:right;padding:1.5mm 2mm;border-bottom:0.4px solid ${C.border}}
+    td:first-child{text-align:left;color:${C.muted}}`;
+
+  const h = `<style>${css}</style>
+    <h1>Mortgage Calculator Report</h1>
+    <div class="g4">
+      <div class="card grn"><div class="card-lb">Monthly P&amp;I</div><div class="card-v">${document.getElementById('st-pi').textContent}</div></div>
+      <div class="card blu"><div class="card-lb">Total Monthly</div><div class="card-v">${document.getElementById('st-monthly').textContent}</div></div>
+      <div class="card amb"><div class="card-lb">Total Interest</div><div class="card-v">${document.getElementById('st-interest').textContent}</div></div>
+      <div class="card red"><div class="card-lb">Total Cost</div><div class="card-v">${document.getElementById('st-cost').textContent}</div></div>
+    </div>
+    <div class="g2">
+      <div><h2>Monthly Breakdown</h2>${document.getElementById('monthly-breakdown').innerHTML.replace(/class="srow-val" style="color:var\(--amb\)"/g,'class="srow-val"')}</div>
+      <div><h2>Total Payments</h2>${document.getElementById('totals-breakdown').innerHTML.replace(/style="color:var\(--amb\)"/g,'')}</div>
+    </div>
+    <h2 style="page-break-before:always">Amortization Schedule ${document.getElementById('sched-dates').textContent}</h2>
+    ${document.getElementById('amort-table').outerHTML}`;
+
+  document.getElementById('pr-inner').innerHTML = h;
+  window.print();
+}
+
+// ── INIT ─────────────────────────────────────────────────
+document.getElementById('start-date').value = new Date().toISOString().split('T')[0];
+
+// Wire all plain inputs that just call render()
+['amort-yr','amort-mo','hoa','pmi-rate'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+});
+
+loadSaved();
+render();
+</script>
+</body>
+</html>

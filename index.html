@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinLit360.com</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.hero{max-width:1340px;margin:0 auto;padding:4rem 1.5rem;text-align:center}
+.hero h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;letter-spacing:-0.03em;margin-bottom:0.75rem}
+.hero p{font-size:0.9rem;font-family:'DM Mono',monospace;color:var(--mut);margin-bottom:3rem}
+.app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.85rem;max-width:960px;margin:0 auto}
+@media(max-width:700px){.app-grid{grid-template-columns:1fr 1fr}}
+.app-card{display:block;background:var(--surf);border:1px solid var(--bdr);border-radius:10px;padding:1rem 1.1rem;text-decoration:none;transition:all 0.2s;position:relative;overflow:hidden}
+.app-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.app-card:hover{border-color:var(--bdr2);transform:translateY(-2px)}
+.app-card.retirement::before{background:var(--grn)}.app-card.mortgage::before{background:var(--blu)}
+.app-card.car::before{background:var(--amb)}.app-card.budget::before{background:var(--org)}
+.app-card.debt::before{background:var(--red)}.app-card.savings::before{background:var(--tel)}
+.app-icon{font-size:1.4rem;margin-bottom:0.4rem}
+.app-name{font-size:0.82rem;font-weight:700;color:var(--txt);margin-bottom:0.2rem}
+.app-desc{font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--mut);line-height:1.4}
+.nw-hero{max-width:900px;margin:0 auto 2rem;background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:1.5rem 2rem}
+.nw-hero-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;margin-top:1rem}
+@media(max-width:600px){.nw-hero-grid{grid-template-columns:1fr 1fr}}
+.nw-item-lbl{font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem}
+.nw-item-val{font-size:1.15rem;font-weight:700;letter-spacing:-0.02em}
+.nw-item-val.pos{color:var(--grn)}.nw-item-val.neg{color:var(--red)}.nw-item-val.neu{color:var(--txt)}
+.app-card.loan::before{background:var(--tel)}
+.app-card.rental::before{background:var(--pur)}
+.app-card.about-card::before{background:var(--mut)}
+.app-card.paycheck-card::before{background:var(--grn)}
+.hero-logo{display:block}
+body.theme-light .hero-logo{border-radius:0;padding:0;background:none}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+
+<script>renderSiteHeader('index')</script>
+
+<div class="hero">
+  <div style="display:flex;justify-content:center;margin-bottom:1.25rem">
+    <img src="logo.png" alt="FinLit360.com" class="hero-logo" style="height:144px;width:auto;border-radius:10px">
+  </div>
+
+  <div class="nw-hero">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.25rem">
+      <div style="font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.1em">Net Worth Overview</div>
+      <div style="font-size:0.67rem;font-family:'DM Mono',monospace;color:var(--mut)">Populates as you fill in each section</div>
+    </div>
+    <div class="nw-hero-grid">
+      <div><div class="nw-item-lbl">Retirement Portfolio</div><div class="nw-item-val pos" id="nwh-ret">—</div></div>
+      <div><div class="nw-item-lbl">Home Equity</div><div class="nw-item-val pos" id="nwh-eq">—</div></div>
+      <div><div class="nw-item-lbl">Savings</div><div class="nw-item-val pos" id="nwh-sav">—</div></div>
+      <div><div class="nw-item-lbl">Total Liabilities</div><div class="nw-item-val neg" id="nwh-liab">—</div></div>
+      <div><div class="nw-item-lbl">Total Assets</div><div class="nw-item-val neu" id="nwh-assets">—</div></div>
+      <div><div class="nw-item-lbl">Net Worth</div><div class="nw-item-val" id="nwh-total">—</div></div>
+    </div>
+  </div>
+
+  <!-- BACKUP & RESTORE -->
+  <div style="max-width:960px;margin:0 auto 1.5rem;background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:1.25rem 1.75rem;box-shadow:var(--shadow)">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;text-align:center">
+      <div>
+        <div style="font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.3rem">Data Backup &amp; Restore</div>
+        <div style="font-size:0.75rem;font-family:'DM Mono',monospace;color:var(--mut2)">Export all saved data to a single spreadsheet · Import to restore everything</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn grn" onclick="masterExport()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export All Data
+        </button>
+        <label class="btn" style="cursor:pointer">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Restore from Backup
+          <input type="file" accept=".xlsx,.xls" onchange="masterImport(event)" style="display:none">
+        </label>
+        <span id="backup-status" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--grn);display:none"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-grid">
+    <a href="retirement.html" class="app-card retirement">
+      <div class="app-icon">📈</div>
+      <div class="app-name">Retirement</div>
+      <div class="app-desc">401k accumulation, drawdown, SS, inheritance, other accounts, sequence risk</div>
+    </a>
+    <a href="mortgage.html" class="app-card mortgage">
+      <div class="app-icon">🏠</div>
+      <div class="app-name">Mortgage</div>
+      <div class="app-desc">Payment, amortization, PMI auto-removal, extra payments, property tax &amp; insurance</div>
+    </a>
+    <a href="car.html" class="app-card car">
+      <div class="app-icon">🚗</div>
+      <div class="app-name">Car Loan</div>
+      <div class="app-desc">Payment or price mode, trade-in, sales tax, fees, full amortization schedule</div>
+    </a>
+    <a href="budget.html" class="app-card budget">
+      <div class="app-icon">💰</div>
+      <div class="app-name">Budget</div>
+      <div class="app-desc">Paychecks, bills, E&amp;S feeder accounts, per-paycheck breakdown, discretionary</div>
+    </a>
+    <a href="debt.html" class="app-card debt">
+      <div class="app-icon">📊</div>
+      <div class="app-name">Debt &amp; DTI</div>
+      <div class="app-desc">Installment &amp; revolving debts, DTI, avalanche &amp; snowball payoff strategies</div>
+    </a>
+    <a href="savings.html" class="app-card savings">
+      <div class="app-icon">🏦</div>
+      <div class="app-name">Savings</div>
+      <div class="app-desc">Account tracking, growth rates, monthly contributions, projections</div>
+    </a>
+    <a href="loan.html" class="app-card loan">
+      <div class="app-icon">💳</div>
+      <div class="app-name">Loan Calculator</div>
+      <div class="app-desc">Payment, amortization, origination fees, extra payments, effective APR</div>
+    </a>
+    <a href="rental.html" class="app-card rental">
+      <div class="app-icon">🏘️</div>
+      <div class="app-name">Rental Property</div>
+      <div class="app-desc">Cap rate, cash flow, IRR, MIRR, MOIC, DSCR, depreciation, tax analysis</div>
+    </a>
+    <a href="paycheck.html" class="app-card paycheck-card">
+      <div class="app-icon">💵</div>
+      <div class="app-name">Paycheck Calculator</div>
+      <div class="app-desc">Take-home pay, all 50 states, federal & FICA, benefits, 1099 SE tax, raise preview</div>
+    </a>
+    <a href="about.html" class="app-card about-card">
+      <div class="app-icon">ℹ️</div>
+      <div class="app-name">About FinLit360</div>
+      <div class="app-desc">What it is, how it works, disclaimer, and the story behind it</div>
+    </a>
+  </div>
+</div>
+
+<script>
+(function() {
+  const nw = getNetWorthData();
+  const homeEquity  = Math.max(0, (nw.home_value||0) - (nw.home_mortgage_balance||0));
+  const retPort     = nw.retirement_portfolio || 0;
+  const savings     = nw.savings_total || 0;
+  const totalAssets = homeEquity + retPort + savings;
+  const totalLiab   = (nw.home_mortgage_balance||0) + (nw.car_balances_total||0) + (nw.other_debts_total||0) + (nw.revolving_total||0);
+  const netWorth    = totalAssets - totalLiab;
+  const hasData     = totalAssets > 0 || totalLiab > 0;
+
+  function set(id, val, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = (val === 0 && !hasData) ? '—' : fL(val);
+    if (cls) el.className = 'nw-item-val ' + cls;
+  }
+
+  set('nwh-ret',    retPort,     'pos');
+  set('nwh-eq',     homeEquity,  'pos');
+  set('nwh-sav',    savings,     'pos');
+  set('nwh-liab',   totalLiab,   'neg');
+  set('nwh-assets', totalAssets, 'neu');
+
+  const totalEl = document.getElementById('nwh-total');
+  if (totalEl) {
+    totalEl.textContent = hasData ? fL(netWorth) : '—';
+    totalEl.className   = 'nw-item-val ' + (netWorth >= 0 ? 'pos' : 'neg');
+  }
+})();
+
+// ── MASTER EXPORT ─────────────────────────────────────────
+function masterExport() {
+  var wb = XLSX.utils.book_new();
+  var exported = 0;
+
+  // ── BUDGET ──────────────────────────────────────────────
+  var budgetData = storeLoad(KEYS.budget);
+  if (budgetData) {
+    // Bills sheet
+    var billRows = [['Bill Name','Amount ($)','Paycheck Assignment']];
+    if (budgetData.bills) {
+      var pcMap = {'1':'Check 1','2':'Check 2','3':'Check 3','4':'Check 4','split':'Split'};
+      budgetData.bills.forEach(function(b) {
+        billRows.push([b.name, b.amount, pcMap[b.paycheck] || b.paycheck]);
+      });
+    }
+    var wsBills = XLSX.utils.aoa_to_sheet(billRows);
+    wsBills['!cols'] = [{wch:28},{wch:14},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, wsBills, 'Budget - Bills');
+
+    // E&S sheet
+    var esRows = [['Account Name','Bi-weekly Amount ($)']];
+    if (budgetData.esAccounts) {
+      budgetData.esAccounts.forEach(function(e) { esRows.push([e.name, e.biweekly]); });
+    }
+    var wsES = XLSX.utils.aoa_to_sheet(esRows);
+    wsES['!cols'] = [{wch:28},{wch:22}];
+    XLSX.utils.book_append_sheet(wb, wsES, 'Budget - E&S');
+
+    // Config sheet
+    var budgCfg = [
+      ['Field','Value'],
+      ['Gross Annual Income', budgetData.gross || ''],
+      ['Net Per Paycheck',    budgetData.net   || ''],
+      ['Pay Frequency',       budgetData.freq  || 'semimonthly'],
+    ];
+    var wsBCfg = XLSX.utils.aoa_to_sheet(budgCfg);
+    wsBCfg['!cols'] = [{wch:24},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsBCfg, 'Budget - Config');
+    exported++;
+  }
+
+  // ── DEBT ────────────────────────────────────────────────
+  var debtData = storeLoad(KEYS.debt);
+  if (debtData) {
+    // Installment
+    var instRows = [['Name','Monthly Payment ($)','APR (%)','Current Balance ($)','Original Balance ($)','Type']];
+    if (debtData.installmentDebts) {
+      debtData.installmentDebts.forEach(function(d) {
+        instRows.push([d.name, d.payment, d.apr, d.balance, d.origBalance, d.type]);
+      });
+    }
+    var wsInst = XLSX.utils.aoa_to_sheet(instRows);
+    wsInst['!cols'] = [{wch:22},{wch:20},{wch:10},{wch:22},{wch:22},{wch:15}];
+    XLSX.utils.book_append_sheet(wb, wsInst, 'Debt - Installment');
+
+    // Revolving
+    var revRows = [['Name','Credit Limit ($)','Current Balance ($)','APR (%)','Cash Advance Limit ($)']];
+    if (debtData.revolvingAccts) {
+      debtData.revolvingAccts.forEach(function(r) {
+        revRows.push([r.name, r.limit, r.balance, r.apr, r.cal]);
+      });
+    }
+    var wsRev = XLSX.utils.aoa_to_sheet(revRows);
+    wsRev['!cols'] = [{wch:22},{wch:18},{wch:22},{wch:10},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, wsRev, 'Debt - Revolving');
+
+    // Config
+    var debtCfg = [
+      ['Field','Value'],
+      ['Gross Annual Income', debtData.gross     || ''],
+      ['Extra Monthly Payment',debtData.extra    || '0'],
+      ['Home Value',          debtData.homeValue || '0'],
+      ['Strategy',            debtData.strategy  || 'avalanche'],
+    ];
+    var wsDCfg = XLSX.utils.aoa_to_sheet(debtCfg);
+    wsDCfg['!cols'] = [{wch:24},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsDCfg, 'Debt - Config');
+    exported++;
+  }
+
+  // ── SAVINGS ─────────────────────────────────────────────
+  var savData = storeLoad(KEYS.savings);
+  if (savData) {
+    var savRows = [['Account Name','Balance ($)','Monthly Contribution ($)','Growth Rate (%)','Purpose / Label']];
+    if (savData.accounts) {
+      savData.accounts.forEach(function(a) {
+        savRows.push([a.name, a.balance, a.monthly, a.rate, a.label || '']);
+      });
+    }
+    var wsSav = XLSX.utils.aoa_to_sheet(savRows);
+    wsSav['!cols'] = [{wch:24},{wch:14},{wch:26},{wch:18},{wch:24}];
+    XLSX.utils.book_append_sheet(wb, wsSav, 'Savings - Accounts');
+
+    var savCfg = [
+      ['Field','Value'],
+      ['Gross Annual Income', savData.gross     || ''],
+      ['Projection Years',    savData.projYears || '20'],
+    ];
+    var wsSCfg = XLSX.utils.aoa_to_sheet(savCfg);
+    wsSCfg['!cols'] = [{wch:24},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsSCfg, 'Savings - Config');
+    exported++;
+  }
+
+  // ── MORTGAGE ────────────────────────────────────────────
+  var mortData = storeLoad(KEYS.mortgage);
+  if (mortData) {
+    var mortRows = [['Field','Value']];
+    Object.keys(mortData).forEach(function(k) {
+      if (k === '_extras') return; // handle separately
+      mortRows.push([k, mortData[k]]);
+    });
+    // Extra payments as sub-rows
+    if (mortData._extras && mortData._extras.length > 0) {
+      mortRows.push(['','']);
+      mortRows.push(['Extra Payments','']);
+      mortRows.push(['Amount ($)','Type (monthly/yearly)']);
+      mortData._extras.forEach(function(ep) {
+        mortRows.push([ep.amount, ep.type]);
+      });
+    }
+    var wsMort = XLSX.utils.aoa_to_sheet(mortRows);
+    wsMort['!cols'] = [{wch:22},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsMort, 'Mortgage - Config');
+    exported++;
+  }
+
+  // ── CAR ─────────────────────────────────────────────────
+  var carData = storeLoad(KEYS.car);
+  if (carData) {
+    var carRows = [['Field','Value']];
+    Object.keys(carData).forEach(function(k) { carRows.push([k, carData[k]]); });
+    var wsCar = XLSX.utils.aoa_to_sheet(carRows);
+    wsCar['!cols'] = [{wch:22},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, wsCar, 'Car - Config');
+    exported++;
+  }
+
+  // ── RETIREMENT ──────────────────────────────────────────
+  var retData = storeLoad(KEYS.retirement);
+  if (retData) {
+    var retRows = [['Field','Value']];
+    Object.keys(retData).forEach(function(k) {
+      var val = retData[k];
+      // Serialize complex objects as JSON strings
+      if (typeof val === 'object' && val !== null) {
+        retRows.push([k, JSON.stringify(val)]);
+      } else {
+        retRows.push([k, val]);
+      }
+    });
+    var wsRet = XLSX.utils.aoa_to_sheet(retRows);
+    wsRet['!cols'] = [{wch:28},{wch:60}];
+    XLSX.utils.book_append_sheet(wb, wsRet, 'Retirement - Config');
+    exported++;
+  }
+
+  if (exported === 0) {
+    alert('No saved data found. Visit each calculator, enter your data, and click Save first.');
+    return;
+  }
+
+  // Add a metadata sheet first (prepend)
+  var meta = [
+    ['FinLit360 Data Backup'],
+    ['Exported:', new Date().toLocaleString()],
+    ['Calculators included:', exported],
+    [''],
+    ['To restore: go to the Home page and click "Restore from Backup"'],
+    ['Do not rename sheets or modify the structure of Config sheets.'],
+    ['You may edit tabular data sheets (Bills, E&S, Accounts, etc.) before restoring.'],
+  ];
+  var wsMeta = XLSX.utils.aoa_to_sheet(meta);
+  wsMeta['!cols'] = [{wch:30},{wch:40}];
+  // Prepend metadata sheet
+  wb.SheetNames.unshift('Info');
+  wb.Sheets['Info'] = wsMeta;
+
+  var date = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, 'finlit360_backup_' + date + '.xlsx');
+
+  var statusEl = document.getElementById('backup-status');
+  statusEl.textContent = '✓ Exported ' + exported + ' calculator' + (exported===1?'':'s');
+  statusEl.style.display = 'inline';
+  setTimeout(function(){ statusEl.style.display = 'none'; }, 4000);
+}
+
+// ── MASTER IMPORT ─────────────────────────────────────────
+function masterImport(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb   = XLSX.read(data, { type: 'array' });
+      var restored = 0;
+
+      function getSheet(name) { return wb.Sheets[name]; }
+      function toRows(ws)     { return ws ? XLSX.utils.sheet_to_json(ws, { header:1 }) : []; }
+
+      // Helper: parse key/value sheet into object
+      function parseKV(sheetName) {
+        var rows = toRows(getSheet(sheetName));
+        var obj  = {};
+        // rows[0] is header ['Field','Value'], rows[1+] are data
+        for (var i = 1; i < rows.length; i++) {
+          if (rows[i] && rows[i][0] !== undefined && rows[i][0] !== '') {
+            obj[String(rows[i][0])] = rows[i][1] !== undefined ? rows[i][1] : '';
+          }
+        }
+        return obj;
+      }
+
+      // ── BUDGET ────────────────────────────────────────
+      var billSheet = getSheet('Budget - Bills');
+      var esSheet   = getSheet('Budget - E&S');
+      var bCfgSheet = getSheet('Budget - Config');
+      if (billSheet || esSheet || bCfgSheet) {
+        var budgetState = storeLoad(KEYS.budget) || {};
+        var pcMap = {'Check 1':'1','Check 2':'2','Check 3':'3','Check 4':'4','Split':'split'};
+
+        if (billSheet) {
+          var billRows = toRows(billSheet);
+          var newBills = [];
+          var bid = 100;
+          for (var i = 1; i < billRows.length; i++) {
+            var r = billRows[i];
+            if (!r || !r[0]) continue;
+            var pcRaw  = String(r[2] || '').trim();
+            var pcNorm = pcMap[pcRaw] || pcRaw.toLowerCase().replace('check ','').trim();
+            if (!['1','2','3','4','split'].includes(pcNorm)) pcNorm = '1';
+            newBills.push({ id: bid++, name: String(r[0]).trim(), amount: parseFloat(r[1])||0, paycheck: pcNorm });
+          }
+          if (newBills.length > 0) budgetState.bills = newBills;
+        }
+
+        if (esSheet) {
+          var esRows2 = toRows(esSheet);
+          var newES   = [];
+          var eid     = 100;
+          for (var j = 1; j < esRows2.length; j++) {
+            var er = esRows2[j];
+            if (!er || !er[0]) continue;
+            newES.push({ id: eid++, name: String(er[0]).trim(), biweekly: parseFloat(er[1])||0 });
+          }
+          if (newES.length > 0) budgetState.esAccounts = newES;
+        }
+
+        if (bCfgSheet) {
+          var bcfg = parseKV('Budget - Config');
+          if (bcfg['Gross Annual Income']) budgetState.gross = String(bcfg['Gross Annual Income']);
+          if (bcfg['Net Per Paycheck'])    budgetState.net   = String(bcfg['Net Per Paycheck']);
+          if (bcfg['Pay Frequency'])       budgetState.freq  = String(bcfg['Pay Frequency']);
+        }
+
+        storeSave(KEYS.budget, budgetState);
+        restored++;
+      }
+
+      // ── DEBT ──────────────────────────────────────────
+      var instSheet2 = getSheet('Debt - Installment');
+      var revSheet2  = getSheet('Debt - Revolving');
+      var dCfgSheet  = getSheet('Debt - Config');
+      if (instSheet2 || revSheet2 || dCfgSheet) {
+        var debtState = storeLoad(KEYS.debt) || {};
+
+        if (instSheet2) {
+          var instRows2 = toRows(instSheet2);
+          var newInst   = [];
+          var did       = 100;
+          for (var ii = 1; ii < instRows2.length; ii++) {
+            var ir = instRows2[ii];
+            if (!ir || !ir[0]) continue;
+            newInst.push({ id:did++, name:String(ir[0]).trim(), payment:parseFloat(ir[1])||0,
+              apr:parseFloat(ir[2])||0, balance:parseFloat(ir[3])||0,
+              origBalance:parseFloat(ir[4])||0, type:String(ir[5]||'').trim() });
+          }
+          if (newInst.length > 0) debtState.installmentDebts = newInst;
+        }
+
+        if (revSheet2) {
+          var revRows2 = toRows(revSheet2);
+          var newRev   = [];
+          var rid      = 100;
+          for (var ri = 1; ri < revRows2.length; ri++) {
+            var rr = revRows2[ri];
+            if (!rr || !rr[0]) continue;
+            newRev.push({ id:rid++, name:String(rr[0]).trim(), limit:parseFloat(rr[1])||0,
+              balance:parseFloat(rr[2])||0, apr:parseFloat(rr[3])||0, cal:parseFloat(rr[4])||0 });
+          }
+          if (newRev.length > 0) debtState.revolvingAccts = newRev;
+        }
+
+        if (dCfgSheet) {
+          var dcfg = parseKV('Debt - Config');
+          if (dcfg['Gross Annual Income'])   debtState.gross      = String(dcfg['Gross Annual Income']);
+          if (dcfg['Extra Monthly Payment']) debtState.extra      = String(dcfg['Extra Monthly Payment']);
+          if (dcfg['Home Value'])            debtState.homeValue  = String(dcfg['Home Value']);
+          if (dcfg['Strategy'])              debtState.strategy   = String(dcfg['Strategy']);
+        }
+
+        storeSave(KEYS.debt, debtState);
+        restored++;
+      }
+
+      // ── SAVINGS ───────────────────────────────────────
+      var savSheet  = getSheet('Savings - Accounts');
+      var sCfgSheet = getSheet('Savings - Config');
+      if (savSheet || sCfgSheet) {
+        var savState = storeLoad(KEYS.savings) || {};
+
+        if (savSheet) {
+          var savRows2 = toRows(savSheet);
+          var newAccs  = [];
+          var said     = 100;
+          for (var si = 1; si < savRows2.length; si++) {
+            var sr = savRows2[si];
+            if (!sr || !sr[0]) continue;
+            newAccs.push({ id:said++, name:String(sr[0]).trim(), balance:parseFloat(sr[1])||0,
+              monthly:parseFloat(sr[2])||0, rate:parseFloat(sr[3])||0, label:String(sr[4]||'').trim() });
+          }
+          if (newAccs.length > 0) savState.accounts = newAccs;
+        }
+
+        if (sCfgSheet) {
+          var scfg = parseKV('Savings - Config');
+          if (scfg['Gross Annual Income']) savState.gross     = String(scfg['Gross Annual Income']);
+          if (scfg['Projection Years'])    savState.projYears = String(scfg['Projection Years']);
+        }
+
+        storeSave(KEYS.savings, savState);
+        restored++;
+      }
+
+      // ── MORTGAGE ──────────────────────────────────────
+      var mCfgSheet = getSheet('Mortgage - Config');
+      if (mCfgSheet) {
+        var mortState = storeLoad(KEYS.mortgage) || {};
+        var mRows     = toRows(mCfgSheet);
+        var extras    = [];
+        var inExtras  = false;
+
+        for (var mi = 1; mi < mRows.length; mi++) {
+          var mr = mRows[mi];
+          if (!mr || mr[0] === '' || mr[0] === undefined) { inExtras = false; continue; }
+          if (String(mr[0]) === 'Extra Payments') { inExtras = true; continue; }
+          if (String(mr[0]) === 'Amount ($)')     { continue; } // header row
+          if (inExtras) {
+            extras.push({ id: mi, amount: parseFloat(mr[0])||0, type: String(mr[1]||'monthly') });
+          } else {
+            mortState[String(mr[0])] = mr[1] !== undefined ? mr[1] : '';
+          }
+        }
+        if (extras.length > 0) mortState._extras = extras;
+        storeSave(KEYS.mortgage, mortState);
+        restored++;
+      }
+
+      // ── CAR ───────────────────────────────────────────
+      var cCfgSheet = getSheet('Car - Config');
+      if (cCfgSheet) {
+        var carState = parseKV('Car - Config');
+        if (Object.keys(carState).length > 0) {
+          storeSave(KEYS.car, carState);
+          restored++;
+        }
+      }
+
+      // ── RETIREMENT ────────────────────────────────────
+      var rCfgSheet = getSheet('Retirement - Config');
+      if (rCfgSheet) {
+        var retState = {};
+        var rRows    = toRows(rCfgSheet);
+        for (var rri = 1; rri < rRows.length; rri++) {
+          var rr2 = rRows[rri];
+          if (!rr2 || rr2[0] === undefined || rr2[0] === '') continue;
+          var key = String(rr2[0]);
+          var val = rr2[1];
+          // Try to parse JSON for complex fields
+          if (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{'))) {
+            try { val = JSON.parse(val); } catch(e) { /* keep as string */ }
+          }
+          retState[key] = val;
+        }
+        if (Object.keys(retState).length > 0) {
+          storeSave(KEYS.retirement, retState);
+          restored++;
+        }
+      }
+
+      // ── DONE ──────────────────────────────────────────
+      event.target.value = '';
+
+      var statusEl = document.getElementById('backup-status');
+      if (restored === 0) {
+        statusEl.textContent = '⚠ No recognizable data found in file';
+        statusEl.style.color = 'var(--amb)';
+      } else {
+        statusEl.textContent = '✓ Restored ' + restored + ' calculator' + (restored===1?'':'s') + ' — navigate to each page to see your data';
+        statusEl.style.color = 'var(--grn)';
+      }
+      statusEl.style.display = 'inline';
+      setTimeout(function(){ statusEl.style.display = 'none'; statusEl.style.color = 'var(--grn)'; }, 6000);
+
+    } catch(err) {
+      alert('Error reading backup file: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+</script>
+
+<!-- MOBILE NOTICE MODAL -->
+<div id="mobile-notice" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:16px;padding:2rem 1.75rem;max-width:340px;width:100%;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,0.3)">
+    <div style="font-size:2rem;margin-bottom:0.75rem">💻</div>
+    <div style="font-size:1rem;font-weight:700;letter-spacing:-0.01em;margin-bottom:0.6rem;color:var(--txt)">Best on Desktop</div>
+    <div style="font-size:0.78rem;font-family:'DM Mono',monospace;color:var(--mut2);line-height:1.7;margin-bottom:1.25rem">
+      FinLit360 is best experienced on a desktop or laptop. Mobile support is coming soon — some layouts may appear cramped on smaller screens.
+    </div>
+    <button onclick="closeMobileNotice()" style="width:100%;padding:0.7rem;background:var(--grn);color:#000;font-family:'DM Mono',monospace;font-size:0.78rem;font-weight:700;border:none;border-radius:8px;cursor:pointer;letter-spacing:0.04em">Got it, continue anyway</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  if (window.innerWidth <= 768 && !sessionStorage.getItem('mob_notice_seen')) {
+    var el = document.getElementById('mobile-notice');
+    if (el) el.style.display = 'flex';
+  }
+})();
+function closeMobileNotice() {
+  sessionStorage.setItem('mob_notice_seen', '1');
+  document.getElementById('mobile-notice').style.display = 'none';
+}
+</script>
+</body>
+</html>

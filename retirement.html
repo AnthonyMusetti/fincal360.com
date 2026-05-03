@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retirement Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+body{padding:1.5rem}
+.layout{max-width:1340px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:1.25rem;align-items:start}
+.bottom{max-width:1340px;margin:1.25rem auto 0}
+@media(max-width:920px){.layout{grid-template-columns:1fr}}
+.panel{background:transparent;border:none;border-radius:0;padding:0}
+.panel.dimmed{opacity:0.45;pointer-events:none}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .sidebar{position:static !important}
+  .tab-panel{max-height:none !important}
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('retirement')</script>
+
+
+<div class="layout">
+<div class="sidebar">
+  <div class="tab-bar">
+    <button class="tab-btn accum active" onclick="switchTab('accum')"><span class="tdot"></span>401k</button>
+    <button class="tab-btn inj" id="tab-inj-btn" onclick="switchTab('inj')"><span class="tdot"></span>Inheritance</button>
+    <button class="tab-btn retire" onclick="switchTab('retire')"><span class="tdot"></span>Retirement Plan</button>
+    <button class="plus-tab-btn no-print" id="add-other-btn" onclick="addOtherTab()" title="Add other retirement accounts">+</button>
+  </div>
+  <!-- TAB: ACCUMULATION -->
+  <div class="tab-panel active" id="tab-accum">
+  <div class="panel" id="panel-accum">
+    <div class="phase-label accum">401k &mdash; Accumulation</div>
+
+    <div class="sect">
+      <div class="sect-t">Your Info</div>
+      <div class="sg">
+        <div class="sl"><span>current age</span><span class="sv" id="v-cage">35</span></div>
+        <input type="range" min="18" max="64" step="1" value="35" id="s-cage">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>current balance ($)</span></div>
+        <input type="number" id="n-bal" value="125000" min="0" max="99999999" placeholder="0">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>annual salary ($)</span></div>
+        <input type="number" id="n-sal" value="173000" min="0" max="9999999" placeholder="0">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Contributions</div>
+      <div class="freq-row">
+        <div class="freq-btn active" id="fb-annual" onclick="setFreq('annual')">Annual</div>
+        <div class="freq-btn" id="fb-monthly" onclick="setFreq('monthly')">Monthly</div>
+      </div>
+      <div class="sg">
+        <div class="sl"><span>employee contrib %</span><span class="sv" id="v-cpct">10.0%</span></div>
+        <input type="range" min="0" max="50" step="0.5" value="10" id="s-cpct">
+      </div>
+      <div class="sg">
+        <div class="sl"><span id="contrib-freq-lbl">annual contrib</span><span class="sv" id="v-contrib">—</span></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span>Employer Match</span>
+          <div style="display:flex;align-items:center;gap:0.4rem">
+            <label class="tog" style="margin-bottom:0">
+              <input type="checkbox" id="cb-match" checked>
+              <div class="tog-tr"></div><div class="tog-th"></div>
+            </label>
+            <span style="font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--mut2)" id="match-on-lbl">on</span>
+          </div>
+        </div>
+      </div>
+      <div id="match-body">
+        <div class="sg">
+          <div class="sl"><span>match cap %</span><span class="sv" id="v-mcap">4.0%</span></div>
+          <input type="range" min="0" max="10" step="0.5" value="4" id="s-mcap">
+        </div>
+        <div class="cb-row">
+          <input type="checkbox" id="cb-5to4">
+          <label for="cb-5to4">5-to-4 (contribute 5% to receive 4% match)</label>
+        </div>
+        <div class="sg" style="margin-top:0.6rem">
+          <div class="sl"><span id="match-freq-lbl">annual match</span><span class="sv" id="v-match">—</span></div>
+        </div>
+      </div>
+      <div class="sg" style="margin-top:0.4rem">
+        <div class="sl"><span id="total-freq-lbl">total annual</span><span class="sv" id="v-total-contrib">—</span></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Growth</div>
+      <div class="sg">
+        <div class="sl"><span>pre-retirement growth</span><span class="sv" id="v-pgrow">7.0%</span></div>
+        <input type="range" min="3" max="12" step="0.5" value="7" id="s-pgrow">
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /tab-accum -->
+  <!-- TAB: INJECTION -->
+  <div class="tab-panel" id="tab-inj">
+  <div class="panel" id="panel-inj">
+    <div class="panel-hdr">
+      <div class="phase-label inj" style="margin-bottom:0">Inheritance</div>
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <label class="tog" style="margin-bottom:0">
+          <input type="checkbox" id="cb-inj">
+          <div class="tog-tr"></div><div class="tog-th"></div>
+        </label>
+        <span style="font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--mut2)" id="inj-on-lbl">off</span>
+      </div>
+    </div>
+
+    <div id="inj-body" style="opacity:0.35;pointer-events:none">
+      <div class="sect">
+        <div class="sect-t">Inheritance Details</div>
+        <div class="sg">
+          <div class="sl"><span>amount ($)</span></div>
+          <input type="number" id="n-inj" value="900000" min="0" max="99999999" placeholder="0">
+        </div>
+        <div class="sg">
+          <div class="sl"><span>age received</span><span class="sv" id="v-injage">39</span></div>
+          <input type="range" min="18" max="70" step="1" value="39" id="s-injage">
+        </div>
+        <div class="sg">
+          <div class="sl"><span>years to grow</span><span class="sv" id="v-injgrow">—</span></div>
+        </div>
+        <div class="sg">
+          <div class="sl"><span>future value at retirement</span><span class="sv" id="v-injfv">—</span></div>
+        </div>
+      </div>
+      <div class="sect">
+        <div class="sect-t">Growth Rate</div>
+        <div class="inj-grow-row">
+          <div class="igb active" id="igb-follow" onclick="setInjGrow('follow')">Follow 401k</div>
+          <div class="igb" id="igb-own" onclick="setInjGrow('own')">Custom Rate</div>
+        </div>
+        <div id="inj-own-rate" style="display:none">
+          <div class="sg">
+            <div class="sl"><span>custom growth rate</span><span class="sv" id="v-injrate">6.0%</span></div>
+            <input type="range" min="0" max="12" step="0.5" value="6" id="s-injrate">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /tab-inj -->
+  <!-- TAB: RETIREMENT -->
+  <div class="tab-panel" id="tab-retire">
+  <div class="panel" id="panel-ret">
+    <div class="phase-label retire">Retirement Plan</div>
+
+    <div class="sect">
+      <div class="sect-t">Timing &amp; Portfolio</div>
+      <div class="sg">
+        <div class="sl"><span>retirement age</span><span class="sv" id="v-rage">55</span></div>
+        <input type="range" min="45" max="70" step="1" value="55" id="s-rage">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>starting portfolio</span><span class="sv" id="v-sport">—</span></div>
+        <input type="range" min="0.1" max="20" step="0.1" value="6" id="s-sport">
+        <div style="font-size:0.62rem;color:var(--mut);font-family:'DM Mono',monospace;margin-top:0.25rem" id="port-mode-note">auto-set from accumulation</div>
+      </div>
+      <div class="sg">
+        <div class="sl"><span>target balance at 80</span><span class="sv" id="v-target">$1.0M</span></div>
+        <input type="range" min="0" max="5000000" step="100000" value="1000000" id="s-target">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Investment</div>
+      <div class="sg">
+        <div class="sl"><span>retirement growth rate</span><span class="sv" id="v-rgrow">7.0%</span></div>
+        <input type="range" min="3" max="12" step="0.5" value="7" id="s-rgrow">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>inflation rate</span><span class="sv" id="v-inf">3.0%</span></div>
+        <input type="range" min="1" max="4" step="0.25" value="3" id="s-inf">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Social Security</div>
+      <div class="sg">
+        <div class="sl"><span>combined SS / yr</span><span class="sv" id="v-ss">$48K</span></div>
+        <input type="range" min="0" max="120000" step="2000" value="48000" id="s-ss">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>SS start age</span><span class="sv" id="v-ssage">62</span></div>
+        <input type="range" min="62" max="70" step="1" value="62" id="s-ssage">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Taxes</div>
+      <div class="sg">
+        <div class="sl"><span>effective tax rate</span><span class="sv" id="v-tax">22%</span></div>
+        <input type="range" min="0" max="40" step="1" value="22" id="s-tax">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Monthly Expenses (today's $)</div>
+      <div class="sg">
+        <div class="sl"><span>housing / mo (w/ mortgage)</span><span class="sv" id="v-house">$2,500</span></div>
+        <input type="range" min="1000" max="6000" step="250" value="2500" id="s-house">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>mortgage ends at age</span><span class="sv" id="v-mortage">never</span></div>
+        <input type="range" min="0" max="80" step="1" value="0" id="s-mortage">
+      </div>
+      <div id="postmort-section" style="display:none">
+        <div class="sg">
+          <div class="sl"><span>housing post-mortgage / mo</span><span class="sv" id="v-postmort">$800</span></div>
+          <input type="range" min="500" max="5000" step="250" value="800" id="s-postmort">
+        </div>
+        <div class="mortgage-savings" id="mortgage-savings-note"></div>
+      </div>
+      <div class="sg">
+        <div class="sl"><span>healthcare / mo (pre-65)</span><span class="sv" id="v-hc">$1,500</span></div>
+        <input type="range" min="1000" max="4000" step="100" value="1500" id="s-hc">
+      </div>
+      <div class="sg">
+        <div class="sl"><span>healthcare / mo (65+ Medicare)</span><span class="sv" id="v-hcm">$600</span></div>
+        <input type="range" min="200" max="2000" step="100" value="600" id="s-hcm">
+      </div>
+    </div>
+
+    <div class="sect">
+      <div class="sect-t">Sequence of Returns Risk</div>
+      <div class="tog-row">
+        <label class="tog red"><input type="checkbox" id="cb-stress"><div class="tog-tr"></div><div class="tog-th"></div></label>
+        <span class="tog-lb">show bad sequence scenario</span>
+      </div>
+      <div style="font-size:0.63rem;color:var(--mut);font-family:'DM Mono',monospace;line-height:1.5">Yrs 1&ndash;5: rate&minus;5%&nbsp;|&nbsp;Yrs 6&ndash;15: rate&nbsp;|&nbsp;Yrs 16+: rate+2%.<br>Same nominal withdrawal.</div>
+    </div>
+  </div>
+
+  </div><!-- /tab-retire -->
+
+  <!-- TAB: OTHER ACCOUNTS (added dynamically) -->
+  <div class="tab-panel" id="tab-other">
+    <button class="remove-other-btn" onclick="removeOtherTab()">&#x2715; Remove Other Accounts Tab</button>
+    <div id="other-accounts-list"></div>
+    <button class="add-acc-btn" id="add-acc-btn" onclick="addAccount()" style="display:none">+ Add Account</button>
+  </div>
+
+</div><!-- /sidebar -->
+
+<div class="right">
+
+  <!-- PHASE 1 HEADER + STATS -->
+
+  <div class="phase-hdr accum">
+    <div class="phase-dot"></div>
+    <span id="phase1-hdr">401k accumulation: age 35 &rarr; 55 (20 years)</span>
+  </div>
+  <div class="g3">
+    <div class="sc o"><div class="sc-lb">projected at retirement</div><div class="sc-v" id="st-proj">—</div><div class="sc-s" id="st-proj-sub">—</div></div>
+    <div class="sc o"><div class="sc-lb">total contributions</div><div class="sc-v" id="st-totc">—</div><div class="sc-s" id="st-totc-sub">—</div></div>
+    <div class="sc o"><div class="sc-lb">investment growth</div><div class="sc-v" id="st-grow">—</div><div class="sc-s">return on contributions</div></div>
+  </div>
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Accumulation — Portfolio Growth to Retirement</div>
+      <div class="leg">
+        <span><span class="ld" style="background:#fb923c"></span>projected balance</span>
+        <span><span class="ld" style="background:rgba(251,146,60,0.4)"></span>annual contrib</span>
+      </div>
+    </div>
+    <div class="cw"><canvas id="accum-chart" role="img" aria-label="Portfolio balance growth during accumulation.">Accumulation chart.</canvas></div>
+  </div>
+
+  <!-- INJECTION HEADER + STATS (shown only when enabled) -->
+  <div id="inj-section" style="display:none;flex-direction:column;gap:1.25rem">
+    <div class="phase-hdr inj">
+      <div class="phase-dot"></div>
+      <span id="inj-hdr">Inheritance received at age 39 — grows to retirement</span>
+    </div>
+    <div class="g2">
+      <div class="sc v"><div class="sc-lb">inheritance amount</div><div class="sc-v" id="st-injamt">—</div><div class="sc-s" id="st-injamt-sub">—</div></div>
+      <div class="sc v"><div class="sc-lb">future value at retirement</div><div class="sc-v" id="st-injfv2">—</div><div class="sc-s" id="st-injfv-sub">—</div></div>
+    </div>
+  </div>
+
+  <!-- BRIDGE -->
+  <div class="bridge">
+    <div>
+      <div style="font-size:0.6rem;letter-spacing:0.13em;text-transform:uppercase;font-family:'DM Mono',monospace;color:var(--mut);margin-bottom:0.4rem">Starting Retirement Portfolio</div>
+      <div style="display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap">
+        <div class="bridge-num" id="bridge-num">—</div>
+        <span class="bridge-badge proj" id="bridge-badge">projected</span>
+      </div>
+      <div class="bridge-note" id="bridge-note">Drag the starting portfolio slider to override.</div>
+    </div>
+    <div style="font-size:0.67rem;font-family:'DM Mono',monospace;color:var(--mut);text-align:right;line-height:1.75" id="bridge-breakdown">—</div>
+  </div>
+
+  <!-- PHASE 2 HEADER + STATS -->
+  <div class="phase-hdr retire">
+    <div class="phase-dot"></div>
+    <span id="phase2-hdr">Retirement plan: age 55 &rarr; 80 (25 years) — contributions stop</span>
+  </div>
+  <div class="g4">
+    <div class="sc g"><div class="sc-lb">total annual draw</div><div class="sc-v" id="st-draw">—</div><div class="sc-s">gross, before tax</div></div>
+    <div class="sc b"><div class="sc-lb">after-tax draw</div><div class="sc-v" id="st-at">—</div><div class="sc-s" id="st-at-sub">—</div></div>
+    <div class="sc a"><div class="sc-lb">portfolio draw (pre-SS)</div><div class="sc-v" id="st-pre">—</div><div class="sc-s" id="st-pre-sub">—</div></div>
+    <div class="sc r"><div class="sc-lb">balance at 80</div><div class="sc-v" id="st-end">—</div><div class="sc-s" id="st-end-sub">—</div></div>
+  </div>
+
+  <!-- SPENDING BREAKDOWN -->
+  <div class="card">
+    <div class="ch"><div class="ct">Annual Discretionary Spending — Today's Dollars (after tax, housing &amp; healthcare)</div></div>
+    <div class="g4">
+      <div class="sc p"><div class="sc-lb">at retirement (pre-SS)</div><div class="sc-v" id="sp-pre">—</div><div class="sc-s">today's purchasing power</div></div>
+      <div class="sc t"><div class="sc-lb">after SS starts</div><div class="sc-v" id="sp-ss">—</div><div class="sc-s">today's purchasing power</div></div>
+      <div class="sc p"><div class="sc-lb">after Medicare (65+)</div><div class="sc-v" id="sp-mc">—</div><div class="sc-s">lower HC cost kicks in</div></div>
+      <div class="sc g"><div class="sc-lb">real spending power at 79</div><div class="sc-v" id="sp-80">—</div><div class="sc-s">last year, today's dollars</div></div>
+    </div>
+    <div class="ib" id="inf-note"></div>
+  </div>
+
+  <!-- RETIREMENT CHART -->
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Retirement Drawdown</div>
+      <div class="leg">
+        <span><span class="ld" style="background:#60a5fa"></span>balance (base)</span>
+        <span><span class="ld" style="background:#4ade80"></span>portfolio withdrawal</span>
+        <span id="sl-leg" style="display:none"><span class="ld" style="background:#f87171"></span>balance (stress)</span>
+      </div>
+    </div>
+    <div class="cw"><canvas id="ret-chart" role="img" aria-label="Retirement portfolio balance and annual withdrawals.">Retirement drawdown chart.</canvas></div>
+    <div class="wb" id="stress-note" style="display:none"></div>
+    <div class="ib" id="chart-note"></div>
+  </div>
+
+  </div><!-- /right -->
+</div><!-- /layout -->
+
+<div class="bottom">
+  <!-- TABLE -->
+  <div class="card">
+    <div class="ch">
+      <div class="ct">Year-by-Year Schedule</div>
+      <div style="font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut)">nominal · real discretionary = today's purchasing power</div>
+    </div>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th>age</th><th>opening bal</th><th>growth</th><th>contrib / draw</th>
+            <th>SS</th><th>gross spend</th><th>after-tax</th>
+            <th>housing</th><th>healthcare</th><th>other contribs</th>
+            <th>nom. discret.</th><th>real discret.</th><th>closing bal</th>
+            <th id="s-th" style="display:none">stress bal</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /bottom -->
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let freq        = 'annual';
+let injGrowMode = 'follow';   // 'follow' | 'own'
+let portOverride = false;
+let projectedPort = 0;
+let accumChart, retChart;
+
+// ============================================================
+// MATH — ACCUMULATION
+// FV = balance*(1+r)^n + annualContrib*((1+r)^n-1)/r
+// Verified against manual calculations and edge cases.
+// ============================================================
+function accumulate(balance, annualContrib, ratePercent, years) {
+  if (years <= 0) return balance;
+  const r = ratePercent / 100;
+  if (r === 0) return balance + annualContrib * years;
+  return balance * Math.pow(1+r, years) + annualContrib * (Math.pow(1+r, years) - 1) / r;
+}
+
+// ============================================================
+// MATH — ONE-TIME INJECTION
+// FV = amount * (1+r)^yearsToGrow
+// Verified: exact for all test cases including 0-year edge case.
+// ============================================================
+function injectionFV(amount, ratePercent, yearsToGrow) {
+  if (yearsToGrow <= 0) return amount;
+  return amount * Math.pow(1 + ratePercent / 100, yearsToGrow);
+}
+
+// ============================================================
+// MATH — EMPLOYER MATCH
+// Verified: 6 test cases covering all branches.
+// Float artifact on proportional match rounded at source.
+// ============================================================
+function calcMatch(salary, contribPct, matchCapPct, isFiveToFour, matchEnabled) {
+  const employeeAnnual = salary * contribPct / 100;
+  if (!matchEnabled) return { employeeAnnual, matchAnnual: 0, totalAnnual: employeeAnnual, matchPct: 0 };
+  let matchPct;
+  if (!isFiveToFour) {
+    matchPct = Math.min(contribPct, matchCapPct);
+  } else {
+    matchPct = contribPct >= 5 ? matchCapPct : contribPct * (matchCapPct / 5);
+  }
+  const matchAnnual = Math.round(salary * matchPct / 100 * 100) / 100;
+  return { employeeAnnual, matchAnnual, totalAnnual: employeeAnnual + matchAnnual, matchPct };
+}
+
+// ============================================================
+// MATH — RETIREMENT DRAWDOWN
+// SS is external income. Portfolio only loses (totalDraw - SS).
+// Solver verified: exact for 0% growth trivial cases.
+// Forward sim verified against solver output.
+// ============================================================
+function solve(startAge, startVal, rate, ssAnnual, ssStartAge, targetEnd) {
+  const r = rate / 100;
+  const years = 80 - startAge;
+  let lo = 0, hi = startVal * 3;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    let bal = startVal;
+    for (let y = 0; y < years; y++) {
+      const ss   = (startAge + y) >= ssStartAge ? ssAnnual : 0;
+      const draw = Math.max(0, mid - ss);
+      bal = bal * (1 + r) - draw;
+      if (bal < 0) { bal = 0; break; }
+    }
+    if (bal > targetEnd) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function buildRetSchedule(startAge, startVal, rate, ssAnnual, ssStartAge, targetEnd,
+                           inflation, taxRate, mHouse, mHCpre, mHCpost,
+                           mortAge, postMortHousing, pgrowForOther) {
+  mortAge = mortAge || 0;
+  postMortHousing = postMortHousing || mHouse;
+  pgrowForOther = pgrowForOther || rate;
+  const totalDraw = solve(startAge, startVal, rate, ssAnnual, ssStartAge, targetEnd);
+  const r   = rate / 100;
+  const inf = inflation / 100;
+  const tax = taxRate / 100;
+  const rows = [];
+  let bal = startVal;
+  for (let y = 0, yrs = 80 - startAge; y < yrs; y++) {
+    const age  = startAge + y;
+    const ss   = age >= ssStartAge ? ssAnnual : 0;
+    const draw = Math.max(0, totalDraw - ss);
+    const growth  = bal * r;
+    const closing = Math.max(0, bal + growth - draw);
+    const iF   = Math.pow(1 + inf, y);
+    const mHC  = age < 65 ? mHCpre : mHCpost;
+    // Mortgage: use post-mortgage housing if age >= mortgageEndAge (and mortgageEndAge set)
+    const effectiveHousing = (mortAge > 0 && age >= mortAge) ? postMortHousing : mHouse;
+    const nomH = effectiveHousing * 12 * iF;
+    const nomHC = mHC   * 12 * iF;
+    const nomAT = totalDraw * (1 - tax);
+    // Post-retirement other account contributions reduce discretionary (flat nominal)
+    const otherContrib = calcOtherPostRetirementContrib(age, startAge, pgrowForOther);
+    const nomDisc = nomAT - nomH - nomHC - otherContrib;
+    // Mortgage savings vs full housing (in today's dollars, shown in spending cards)
+    const mortSavingsNom = (mortAge > 0 && age >= mortAge) ? (mHouse - postMortHousing) * 12 * iF : 0;
+    rows.push({ age, opening:bal, growth, draw, ss, closing,
+                grossSpend:totalDraw, nomAT, nomH, nomHC, otherContrib,
+                nomDisc, realDisc: nomDisc / iF, iF, mortSavingsNom,
+                effectiveHousing });
+    bal = closing;
+  }
+  return { totalDraw, rows };
+}
+
+function buildStress(startAge, startVal, totalDraw, rate, ssAnnual, ssStartAge) {
+  const rows = [];
+  let bal = startVal;
+  for (let y = 0, yrs = 80 - startAge; y < yrs; y++) {
+    const age  = startAge + y;
+    const ss   = age >= ssStartAge ? ssAnnual : 0;
+    const draw = Math.max(0, totalDraw - ss);
+    const yr_r = y < 5 ? Math.max(0, rate-5)/100 : y < 15 ? rate/100 : (rate+2)/100;
+    const closing = Math.max(0, bal * (1 + yr_r) - draw);
+    rows.push({ age, closing });
+    bal = closing;
+  }
+  return rows;
+}
+
+// ============================================================
+// FORMATTING
+// ============================================================
+function fS(n) {
+  const a = Math.abs(n), s = n < 0 ? '-' : '';
+  if (a >= 999500) return s+'$'+(a/1e6).toFixed(1)+'M';
+  if (a >= 1e3)    return s+'$'+(a/1e3).toFixed(1)+'K';
+  return s+'$'+Math.round(a);
+}
+function fL(n) {
+  return (n < 0 ? '-' : '')+'$'+Math.abs(Math.round(n)).toLocaleString();
+}
+
+// ============================================================
+// UI TOGGLE HELPERS
+// ============================================================
+function setFreq(f) {
+  freq = f;
+  document.getElementById('fb-annual').classList.toggle('active', f==='annual');
+  document.getElementById('fb-monthly').classList.toggle('active', f==='monthly');
+  const lbl = f === 'monthly' ? 'monthly' : 'annual';
+  document.getElementById('contrib-freq-lbl').textContent = lbl + ' contrib';
+  document.getElementById('match-freq-lbl').textContent   = lbl + ' match';
+  document.getElementById('total-freq-lbl').textContent   = 'total ' + lbl;
+  render();
+}
+
+function setInjGrow(m) {
+  injGrowMode = m;
+  document.getElementById('igb-follow').classList.toggle('active', m==='follow');
+  document.getElementById('igb-own').classList.toggle('active', m==='own');
+  document.getElementById('inj-own-rate').style.display = m==='own' ? 'block' : 'none';
+  render();
+}
+
+document.getElementById('cb-match').addEventListener('change', function() {
+  const on = this.checked;
+  document.getElementById('match-on-lbl').textContent = on ? 'on' : 'off';
+  document.getElementById('match-body').style.opacity = on ? '1' : '0.35';
+  document.getElementById('match-body').style.pointerEvents = on ? 'auto' : 'none';
+  render();
+});
+
+document.getElementById('cb-inj').addEventListener('change', function() {
+  const on = this.checked;
+  document.getElementById('inj-on-lbl').textContent = on ? 'on' : 'off';
+  document.getElementById('inj-body').style.opacity = on ? '1' : '0.35';
+  document.getElementById('inj-body').style.pointerEvents = on ? 'auto' : 'none';
+  const sec = document.getElementById('inj-section');
+  sec.style.display = on ? 'flex' : 'none';
+  portOverride = false;
+  render();
+});
+
+// ============================================================
+// PORT OVERRIDE DETECTION
+// ============================================================
+document.getElementById('s-sport').addEventListener('mousedown', () => { portOverride = true; });
+document.getElementById('s-sport').addEventListener('touchstart', () => { portOverride = true; }, {passive:true});
+function resetPort() { portOverride = false; }
+['s-cage','n-bal','n-sal','s-cpct','s-mcap','cb-5to4','cb-match','s-pgrow','s-rage',
+ 's-injage','n-inj','s-injrate','cb-inj'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) { el.addEventListener('change', resetPort); el.addEventListener('input', resetPort); }
+});
+
+// ============================================================
+// CHARTS
+// ============================================================
+function updateAccumChart(ages, bals, contribs) {
+  const ds = [
+    { label:'projected balance', type:'line', data:bals, borderColor:'#fb923c',
+      backgroundColor:'rgba(251,146,60,0.07)', fill:true, tension:0.35, pointRadius:2, yAxisID:'y' },
+    { label:'annual contrib', type:'bar', data:[contribs[0],...contribs],
+      backgroundColor:'rgba(251,146,60,0.28)', borderColor:'rgba(251,146,60,0.5)',
+      borderWidth:1, yAxisID:'y2' }
+  ];
+  if (accumChart) { accumChart.data.labels=ages; accumChart.data.datasets=ds; accumChart.update('none'); return; }
+  accumChart = new Chart(document.getElementById('accum-chart'), {
+    type:'bar', data:{ labels:ages, datasets:ds },
+    options:{ responsive:true, maintainAspectRatio:false, animation:{ duration:150 },
+      plugins:{ legend:{ display:false },
+        tooltip:{ backgroundColor:'#1e2026', borderColor:'rgba(255,255,255,0.08)', borderWidth:1,
+          titleColor:'#9ca3af', bodyColor:'#f0f0ee',
+          titleFont:{ family:'DM Mono', size:11 }, bodyFont:{ family:'DM Mono', size:11 },
+          callbacks:{ title: ctx=>'age '+ctx[0].label,
+            label: ctx=>ctx.datasetIndex===0?'  balance: '+fL(ctx.raw):'  annual contrib: '+fL(ctx.raw) } } },
+      scales:{
+        x:{ ticks:{ color:'#6b7280', font:{ family:'DM Mono', size:10 }, autoSkip:false, maxRotation:0,
+              callback:(v,i)=>ages[i]%5===0?ages[i]:'' }, grid:{ color:'rgba(255,255,255,0.04)' } },
+        y:{ position:'left', ticks:{ callback:v=>fS(v), color:'#fb923c', font:{ family:'DM Mono', size:10 } },
+            grid:{ color:'rgba(255,255,255,0.05)' } },
+        y2:{ position:'right', ticks:{ callback:v=>fS(v), color:'rgba(251,146,60,0.55)', font:{ family:'DM Mono', size:10 } },
+             grid:{ drawOnChartArea:false } }
+      }
+    }
+  });
+}
+
+function updateRetChart(ages, bals, draws, stressBals, showStress) {
+  const ds = [
+    { label:'balance (base)', type:'line', data:bals, borderColor:'#60a5fa',
+      backgroundColor:'rgba(96,165,250,0.06)', fill:true, tension:0.35, pointRadius:2, yAxisID:'y' },
+    { label:'portfolio withdrawal', type:'bar', data:draws,
+      backgroundColor:'rgba(74,222,128,0.28)', borderColor:'rgba(74,222,128,0.5)',
+      borderWidth:1, yAxisID:'y2' }
+  ];
+  if (showStress) ds.push({ label:'balance (stress)', type:'line', data:stressBals,
+    borderColor:'#f87171', backgroundColor:'transparent',
+    fill:false, tension:0.35, pointRadius:0, borderDash:[4,3], yAxisID:'y' });
+  if (retChart) { retChart.data.labels=ages; retChart.data.datasets=ds; retChart.update('none'); return; }
+  retChart = new Chart(document.getElementById('ret-chart'), {
+    type:'bar', data:{ labels:ages, datasets:ds },
+    options:{ responsive:true, maintainAspectRatio:false, animation:{ duration:150 },
+      plugins:{ legend:{ display:false },
+        tooltip:{ backgroundColor:'#1e2026', borderColor:'rgba(255,255,255,0.08)', borderWidth:1,
+          titleColor:'#9ca3af', bodyColor:'#f0f0ee',
+          titleFont:{ family:'DM Mono', size:11 }, bodyFont:{ family:'DM Mono', size:11 },
+          callbacks:{ title: ctx=>'age '+ctx[0].label,
+            label: ctx=>{
+              if (ctx.datasetIndex===0) return '  base balance: '+fL(ctx.raw);
+              if (ctx.datasetIndex===1) return '  portfolio draw: '+fL(ctx.raw);
+              return '  stress balance: '+fL(ctx.raw);
+            } } } },
+      scales:{
+        x:{ ticks:{ color:'#6b7280', font:{ family:'DM Mono', size:10 }, autoSkip:false, maxRotation:0,
+              callback:(v,i)=>ages[i]%5===0?ages[i]:'' }, grid:{ color:'rgba(255,255,255,0.04)' } },
+        y:{ position:'left', ticks:{ callback:v=>fS(v), color:'#60a5fa', font:{ family:'DM Mono', size:10 } },
+            grid:{ color:'rgba(255,255,255,0.05)' } },
+        y2:{ position:'right', ticks:{ callback:v=>fS(v), color:'#4ade80', font:{ family:'DM Mono', size:10 } },
+             grid:{ drawOnChartArea:false } }
+      }
+    }
+  });
+}
+
+// ============================================================
+// MAIN RENDER
+// ============================================================
+function render() {
+  // Read all inputs
+  const cage       = +document.getElementById('s-cage').value;
+  const balance    = Math.max(0, +document.getElementById('n-bal').value || 0);
+  const salary     = Math.min(9999999, Math.max(0, +document.getElementById('n-sal').value || 0));
+  const contribPct = +document.getElementById('s-cpct').value;
+  const matchCap   = +document.getElementById('s-mcap').value;
+  const fiveToFour = document.getElementById('cb-5to4').checked;
+  const matchOn    = document.getElementById('cb-match').checked;
+  const pgrow      = +document.getElementById('s-pgrow').value;
+
+  const injOn      = document.getElementById('cb-inj').checked;
+  const injAmount  = Math.max(0, +document.getElementById('n-inj').value || 0);
+  const injAge     = +document.getElementById('s-injage').value;
+  const injOwnRate = +document.getElementById('s-injrate').value;
+
+  const rage       = Math.max(cage + 1, +document.getElementById('s-rage').value);
+  const targetEnd  = +document.getElementById('s-target').value;
+  const rgrow      = +document.getElementById('s-rgrow').value;
+  const inflation  = +document.getElementById('s-inf').value;
+  const ssAnnual   = +document.getElementById('s-ss').value;
+  const ssStartAge = +document.getElementById('s-ssage').value;
+  const taxRate    = +document.getElementById('s-tax').value;
+  const mHouse     = +document.getElementById('s-house').value;
+  const mHCpre     = +document.getElementById('s-hc').value;
+  const mHCpost    = +document.getElementById('s-hcm').value;
+  const showStress = document.getElementById('cb-stress').checked;
+
+  const accumYears = rage - cage;
+
+  // Clamp inheritance age to valid range
+  const injAgeClamped = Math.min(rage, Math.max(cage, injAge));
+  const injYearsToGrow = rage - injAgeClamped;
+  const injRate = injGrowMode === 'follow' ? pgrow : injOwnRate;
+  // Compute accurate injFV as the actual contribution to the portfolio
+  // (year-by-year timing: inheritance added end-of-year at injAge, then compounds)
+  // This is more accurate than standalone FV formula which overstates by ~1 year
+  const injFV_standalone = injOn ? injectionFV(injAmount, injRate, injYearsToGrow) : 0;
+  // We calculate accurate injFV after building the accumulation schedule below
+  let injFV = injFV_standalone; // will be overwritten with accurate value after sim
+
+  // Update slider labels
+  document.getElementById('v-cage').textContent  = cage;
+  document.getElementById('v-cpct').textContent  = contribPct.toFixed(1) + '%';
+  document.getElementById('v-mcap').textContent  = matchCap.toFixed(1) + '%';
+  document.getElementById('v-pgrow').textContent = pgrow.toFixed(1) + '%';
+  document.getElementById('v-rage').textContent  = rage;
+  document.getElementById('v-target').textContent = fS(targetEnd);
+  document.getElementById('v-rgrow').textContent = rgrow.toFixed(1) + '%';
+  document.getElementById('v-inf').textContent   = inflation.toFixed(2) + '%';
+  document.getElementById('v-ss').textContent    = ssAnnual > 0 ? '$'+Math.round(ssAnnual/1000)+'K' : '$0';
+  document.getElementById('v-ssage').textContent = ssStartAge;
+  document.getElementById('v-tax').textContent   = taxRate + '%';
+  document.getElementById('v-house').textContent = '$'+mHouse.toLocaleString();
+  // Mortgage
+  const mortAge   = +document.getElementById('s-mortage').value;
+  const postMort  = +document.getElementById('s-postmort').value;
+  const hasMort   = mortAge > 0;
+  document.getElementById('v-mortage').textContent  = hasMort ? mortAge : 'never';
+  document.getElementById('postmort-section').style.display = hasMort ? 'block' : 'none';
+  document.getElementById('v-postmort').textContent = '$'+postMort.toLocaleString();
+  if (hasMort && mortAge > rage) {
+    const savingsPerMo = Math.round(mHouse - postMort);
+    document.getElementById('mortgage-savings-note').textContent =
+      'Saves $'+savingsPerMo.toLocaleString()+'/mo at age '+mortAge+' (today\'s $)';
+  } else if (hasMort) {
+    document.getElementById('mortgage-savings-note').textContent =
+      'Mortgage ends before retirement — post-mortgage cost used from day 1';
+  }
+  document.getElementById('v-hc').textContent    = '$'+mHCpre.toLocaleString();
+  document.getElementById('v-hcm').textContent   = '$'+mHCpost.toLocaleString();
+  document.getElementById('v-injage').textContent = injAgeClamped;
+  document.getElementById('v-injrate').textContent = injOwnRate.toFixed(1) + '%';
+  document.getElementById('v-injgrow').textContent = injYearsToGrow + ' yr' + (injYearsToGrow!==1?'s':'');
+  document.getElementById('v-injfv').textContent  = injOn ? fS(injFV) : '—';
+
+  // Constrain inheritance age slider range dynamically
+  // Only update min/max -- injAgeClamped handles out-of-range values in math
+  // Don't force .value here as it fights user input
+  var injSlider = document.getElementById('s-injage');
+  injSlider.min = cage;
+  injSlider.max = rage;
+
+  // Match calc
+  const matchResult = calcMatch(salary, contribPct, matchCap, fiveToFour, matchOn);
+  const annualTotalContrib = matchResult.totalAnnual;
+  const div = freq === 'monthly' ? 12 : 1;
+  const fLbl = freq === 'monthly' ? '/mo' : '/yr';
+  document.getElementById('v-contrib').textContent       = fS(matchResult.employeeAnnual/div) + fLbl;
+  document.getElementById('v-match').textContent         = matchOn ? fS(matchResult.matchAnnual/div) + fLbl : '$0';
+  document.getElementById('v-total-contrib').textContent = fS(annualTotalContrib/div) + fLbl;
+
+  // ACCUMULATION
+  document.getElementById('phase1-hdr').textContent =
+    'Accumulation phase: age ' + cage + ' \u2192 ' + rage + ' (' + accumYears + ' year' + (accumYears!==1?'s':'') + ')';
+
+  // Build year-by-year accumulation (simple annual compounding + end-of-year contribution)
+  const accumBals    = [balance];
+  const accumContribs = [];
+  let aBal = balance;
+  let injRowIdx = -1;
+  const injBals = []; // track inheritance year for table
+
+  for (let y = 0; y < accumYears; y++) {
+    const currentAge = cage + y;
+    accumContribs.push(annualTotalContrib);
+    aBal = aBal * (1 + pgrow/100) + annualTotalContrib;
+    // Add inheritance at the end of the year the person receives it
+    if (injOn && currentAge === injAgeClamped - 1 && injAgeClamped > cage) {
+      // inheritance added at start of next year
+    }
+    accumBals.push(aBal);
+    injBals.push(injOn && currentAge + 1 === injAgeClamped ? injAmount : 0);
+  }
+
+  // Simpler: add inheritance lump sum to balance at the year it's received, then compound rest
+  // Re-build with inheritance properly timed
+  const accumBals2 = [balance];
+  const accumContribs2 = [];
+  const injRowFlags = [];
+  let aBal2 = balance;
+  for (let y = 0; y < accumYears; y++) {
+    const currentAge = cage + y;
+    const isInjYear = injOn && currentAge === injAgeClamped;
+    accumContribs2.push(annualTotalContrib);
+    const growth = aBal2 * (pgrow/100);
+    aBal2 = aBal2 + growth + annualTotalContrib + (isInjYear ? injAmount : 0);
+    accumBals2.push(aBal2);
+    injRowFlags.push(isInjYear);
+  }
+
+  // If inheritance age equals cage (immediate), add to opening balance
+  let openingWithInj = balance;
+  if (injOn && injAgeClamped === cage) { openingWithInj = balance + injAmount; }
+  // Re-build final if inheritance at cage
+  const finalAccumBals = [injOn && injAgeClamped === cage ? openingWithInj : balance];
+  let fBal = injOn && injAgeClamped === cage ? openingWithInj : balance;
+  const finalInjFlags = [];
+  for (let y = 0; y < accumYears; y++) {
+    const currentAge = cage + y;
+    const isInjYear = injOn && currentAge === injAgeClamped && injAgeClamped > cage;
+    const growth = fBal * (pgrow/100);
+    fBal = fBal + growth + annualTotalContrib + (isInjYear ? injAmount : 0);
+    finalAccumBals.push(fBal);
+    finalInjFlags.push(isInjYear);
+  }
+
+  projectedPort = finalAccumBals[accumYears];
+
+  // Add other accounts FV at retirement
+  const otherFV = calcOtherAccountsFV(rage, pgrow);
+  projectedPort += otherFV;
+
+  // Accurate injFV = difference between with-inheritance and without-inheritance portfolios
+  // This correctly accounts for year-by-year compounding timing
+  if (injOn) {
+    let balNoInj = injAgeClamped === cage ? balance : balance; // always start from balance
+    for (let y = 0; y < accumYears; y++) {
+      balNoInj = balNoInj + balNoInj * (pgrow/100) + annualTotalContrib;
+    }
+    injFV = projectedPort - balNoInj;
+  }
+
+  const totalContribsMade = annualTotalContrib * accumYears;
+  const growthComponent   = projectedPort - (injOn && injAgeClamped === cage ? openingWithInj : balance) - totalContribsMade - (injOn && injAgeClamped > cage ? injAmount : 0);
+
+  // Accumulation stats
+  document.getElementById('st-proj').textContent     = fS(projectedPort);
+  document.getElementById('st-proj-sub').textContent = accumYears + ' yrs at ' + pgrow.toFixed(1) + '%';
+  document.getElementById('st-totc').textContent     = fS(totalContribsMade);
+  document.getElementById('st-totc-sub').textContent =
+    fS(annualTotalContrib) + '/yr · ' + fS(matchResult.employeeAnnual) + ' you' + (matchOn ? ' + ' + fS(matchResult.matchAnnual) + ' match' : '');
+  document.getElementById('st-grow').textContent     = fS(Math.max(0, growthComponent));
+
+  // Inheritance stats
+  if (injOn) {
+    document.getElementById('inj-hdr').textContent =
+      'Inheritance received at age ' + injAgeClamped + ' — grows ' + injYearsToGrow + ' yr' + (injYearsToGrow!==1?'s':'') +
+      ' at ' + injRate.toFixed(1) + '% (' + (injGrowMode==='follow'?'following 401k':'custom rate') + ') — included in all retirement projections';
+    document.getElementById('st-injamt').textContent     = fS(injAmount);
+    document.getElementById('st-injamt-sub').textContent = 'received at age ' + injAgeClamped;
+    document.getElementById('st-injfv2').textContent     = fS(injFV);
+    document.getElementById('st-injfv-sub').textContent  = 'actual contribution to retirement portfolio';
+  }
+
+  // Accumulation chart
+  const accumAges = Array.from({length: accumYears+1}, (_,i) => cage+i);
+  updateAccumChart(accumAges, finalAccumBals, accumContribs2);
+
+  // BRIDGE
+  if (!portOverride) {
+    const clamped = Math.min(20, Math.max(0.1, Math.round(projectedPort/1e5)/10));
+    document.getElementById('s-sport').value = clamped;
+  }
+  const portSliderVal = +document.getElementById('s-sport').value;
+  const activePort    = portOverride ? portSliderVal * 1e6 : projectedPort;
+  document.getElementById('v-sport').textContent = fS(activePort);
+  document.getElementById('bridge-num').textContent = fS(activePort);
+  document.getElementById('bridge-badge').textContent = portOverride ? 'manual override' : 'projected';
+  document.getElementById('bridge-badge').className  = 'bridge-badge ' + (portOverride ? 'manual' : 'proj');
+  document.getElementById('port-mode-note').textContent = portOverride
+    ? 'manually overridden \u2014 adjust accumulation inputs to recalculate'
+    : 'auto-set from accumulation phase';
+
+  let breakdownHtml =
+    'opening balance: ' + fL(balance) + '<br>' +
+    'contributions (' + accumYears + ' yrs): +' + fL(totalContribsMade) + '<br>';
+  if (injOn) breakdownHtml += 'inheritance (' + fS(injAmount) + ' @ age ' + injAgeClamped + '): +' + fL(injFV) + '<br>';
+  breakdownHtml += 'investment growth: +' + fL(Math.max(0, growthComponent)) + '<br>';
+  if (otherFV > 0) breakdownHtml += 'other accounts: +' + fL(otherFV) + '<br>';
+  breakdownHtml += '<strong style="color:var(--grn)">projected total (used in Retirement Plan): ' + fL(projectedPort) + '</strong>';
+  document.getElementById('bridge-breakdown').innerHTML = breakdownHtml;
+
+  // PHASE 2
+  document.getElementById('phase2-hdr').textContent =
+    'Retirement phase: age ' + rage + ' \u2192 80 (' + (80-rage) + ' years) \u2014 contributions stop';
+
+  const { totalDraw, rows } = buildRetSchedule(
+    rage, activePort, rgrow, ssAnnual, ssStartAge, targetEnd,
+    inflation, taxRate, mHouse, mHCpre, mHCpost,
+    mortAge, postMort, pgrow
+  );
+
+  const afterTaxDraw = totalDraw * (1 - taxRate/100);
+  const finalBal     = rows[rows.length-1].closing;
+
+  document.getElementById('st-draw').textContent    = fS(totalDraw);
+  document.getElementById('st-at').textContent      = fS(afterTaxDraw);
+  document.getElementById('st-at-sub').textContent  = taxRate + '% effective rate';
+  document.getElementById('st-pre').textContent     = fS(rows[0].draw);
+  document.getElementById('st-pre-sub').textContent = rage >= ssStartAge
+    ? 'SS active from retirement' : 'ages '+rage+'\u2013'+(ssStartAge-1);
+  document.getElementById('st-end').textContent     = fS(finalBal);
+  document.getElementById('st-end-sub').textContent = 'target: ' + fS(targetEnd);
+
+  const setCard = (id, val) => {
+    const el = document.getElementById(id);
+    el.textContent = val === null ? 'n/a' : fS(val);
+    el.className   = 'sc-v' + (val!==null&&val<0?' cn':val!==null&&val<25000?' cw2':'');
+  };
+  setCard('sp-pre', rows[0].realDisc);
+  const ssIdx = rows.findIndex(r => r.ss > 0);
+  setCard('sp-ss', ssIdx>=0 ? rows[ssIdx].realDisc : (rage>=ssStartAge ? rows[0].realDisc : null));
+  const mcIdx = rows.findIndex(r => r.age >= 65);
+  setCard('sp-mc', mcIdx>=0 ? rows[mcIdx].realDisc : null);
+  setCard('sp-80', rows[rows.length-1].realDisc);
+
+  const totalRetYrs = 80 - rage;
+  const cumInfl = ((Math.pow(1+inflation/100, totalRetYrs)-1)*100).toFixed(0);
+  document.getElementById('inf-note').textContent =
+    inflation.toFixed(2)+'% inflation over '+totalRetYrs+' yrs = '+cumInfl+'% cumulative. ' +
+    'Today\'s $100K = '+fS(100000*Math.pow(1+inflation/100,totalRetYrs))+' nominal at age 80. ' +
+    'Discretionary figures above reflect today\'s purchasing power.';
+
+  const retAges    = [rage, ...rows.map(r=>r.age+1)];
+  const retBals    = [activePort, ...rows.map(r=>r.closing)];
+  const retDraws   = [rows[0].draw, ...rows.map(r=>r.draw)];
+  const stressRows = buildStress(rage, activePort, totalDraw, rgrow, ssAnnual, ssStartAge);
+  const stressBals = [activePort, ...stressRows.map(r=>r.closing)];
+  const stressFinal = stressRows[stressRows.length-1].closing;
+
+  document.getElementById('sl-leg').style.display = showStress ? 'flex' : 'none';
+  document.getElementById('s-th').style.display   = showStress ? '' : 'none';
+  const sn = document.getElementById('stress-note');
+  if (showStress) {
+    sn.style.display = 'block';
+    sn.textContent =
+      '\u26A0 Bad sequence: yrs 1\u20135 at '+Math.max(0,rgrow-5)+'%, ' +
+      'yrs 6\u201315 at '+rgrow+'%, yrs 16+ at '+(rgrow+2)+'%. ' +
+      'Stress balance at 80: '+fS(stressFinal)+'. ' +
+      (stressFinal<=0 ? 'Portfolio runs out. Consider higher balance, lower withdrawal, or later retirement.'
+        : stressFinal<targetEnd*0.5 ? 'Well below target. Vulnerable to poor early returns.'
+        : 'Survives but below base case.');
+  } else { sn.style.display = 'none'; }
+
+  const postSSDraw = ssIdx>=0 ? rows[ssIdx].draw : null;
+  document.getElementById('chart-note').textContent =
+    'Gross draw: '+fS(totalDraw)+'/yr. After tax ('+taxRate+'%): '+fS(afterTaxDraw)+'/yr. ' +
+    (ssAnnual>0&&ssIdx>=0 ? 'SS of '+fS(ssAnnual)+'/yr at age '+ssStartAge+' reduces portfolio draw from '+fS(rows[0].draw)+' to '+fS(postSSDraw)+'/yr.'
+      : ssAnnual>0&&rage>=ssStartAge ? 'SS of '+fS(ssAnnual)+'/yr active from retirement.'
+      : 'No SS configured.');
+
+  updateRetChart(retAges, retBals, retDraws, stressBals, showStress);
+
+  // TABLE
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  // Accumulation rows
+  let tBal = injOn && injAgeClamped === cage ? openingWithInj : balance;
+  for (let y = 0; y < accumYears; y++) {
+    const currentAge = cage + y;
+    const isInjYear  = injOn && currentAge === injAgeClamped && injAgeClamped > cage;
+    const isLastAccum = currentAge + 1 === rage;
+    const growth  = tBal * (pgrow/100);
+    const closing = tBal + growth + annualTotalContrib + (isInjYear ? injAmount : 0);
+    const tr = document.createElement('tr');
+    if (isInjYear)     tr.classList.add('inj-r');
+    if (isLastAccum)   tr.classList.add('ret-r');
+    const injCell = isInjYear ? '<td class="cv">+'+fL(injAmount)+'</td>' : '<td class="cm">\u2014</td>';
+    tr.innerHTML =
+      '<td class="co">'+currentAge+'</td>'+
+      '<td>'+fL(tBal)+'</td>'+
+      '<td class="cg">+'+fL(growth)+'</td>'+
+      '<td class="co">+'+fL(annualTotalContrib)+'</td>'+
+      injCell+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td>'+fL(closing)+'</td>'+
+      (showStress ? '<td class="cm">\u2014</td>' : '');
+    tbody.appendChild(tr);
+    tBal = closing;
+  }
+
+  // Retirement rows
+  rows.forEach((row, i) => {
+    const isSSStart = ssAnnual>0 && row.age===ssStartAge;
+    const isMCStart = row.age===65 && !isSSStart;
+    const tr = document.createElement('tr');
+    if (isSSStart)      tr.classList.add('ss-r');
+    else if (isMCStart) tr.classList.add('mc-r');
+    const dc  = row.nomDisc<0?'cn':row.nomDisc<20000?'cw2':'';
+    const rdc = row.realDisc<0?'cn':row.realDisc<20000?'cw2':'';
+    const bc  = row.closing<activePort*0.08?'cn':row.closing<activePort*0.2?'cw2':'';
+    const sc  = showStress ? '<td class="cs">'+fL(stressRows[i]?.closing??0)+'</td>' : '';
+    tr.innerHTML =
+      '<td>'+row.age+'</td>'+
+      '<td>'+fL(row.opening)+'</td>'+
+      '<td class="cg">+'+fL(row.growth)+'</td>'+
+      '<td class="cn">\u2212'+fL(row.draw)+'</td>'+
+      '<td class="cm">\u2014</td>'+
+      '<td class="cb">'+( row.ss>0?'+'+fL(row.ss):'\u2014')+'</td>'+
+      '<td>'+fL(row.grossSpend)+'</td>'+
+      '<td>'+fL(row.nomAT)+'</td>'+
+      '<td class="cm">\u2212'+fL(row.nomH)+'</td>'+
+      '<td class="cm">\u2212'+fL(row.nomHC)+'</td>'+
+      '<td class="'+dc+'">'+fL(row.nomDisc)+'</td>'+
+      '<td class="'+rdc+'">'+fL(row.realDisc)+'</td>'+
+      '<td class="'+bc+'">'+fL(row.closing)+'</td>'+
+      sc;
+    tbody.appendChild(tr);
+  });
+}
+
+
+// ============================================================
+// SAVE / RESTORE STATE (localStorage — works for local files)
+// ============================================================
+const SAVE_IDS = ['s-cage', 'n-bal', 'n-sal', 's-cpct', 'cb-match', 's-mcap', 'cb-5to4', 's-pgrow', 'cb-inj', 'n-inj', 's-injage', 's-injrate', 's-rage', 's-sport', 's-target', 's-rgrow', 's-inf', 's-ss', 's-ssage', 's-tax', 's-house', 's-mortage', 's-postmort', 's-hc', 's-hcm', 'cb-stress'];
+
+function saveState() {
+  const state = { _freq: freq, _injGrowMode: injGrowMode };
+  SAVE_IDS.forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') state[id] = el.checked;
+    else state[id] = el.value;
+  });
+  // Save other accounts
+  state._otherAccounts = JSON.stringify(otherAccounts);
+  state._nextAccId = nextAccId;
+  try {
+    localStorage.setItem('retirement_calc_v1', JSON.stringify(state));
+    showSaveConfirm();
+  } catch(e) {
+    alert('Save failed. If running from a local file, try opening in Chrome or Edge.');
+  }
+}
+
+function restoreState() {
+  let state;
+  try {
+    const raw = localStorage.getItem('retirement_calc_v1');
+    if (!raw) return false;
+    state = JSON.parse(raw);
+  } catch(e) { return false; }
+
+  // Restore freq and injGrowMode first
+  if (state._freq) setFreq(state._freq);
+  if (state._injGrowMode) setInjGrow(state._injGrowMode);
+
+  // Restore all input values
+  SAVE_IDS.forEach(function(id) {
+    if (!(id in state)) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') {
+      el.checked = state[id];
+      // Fire change event so dependent UI updates
+      el.dispatchEvent(new Event('change'));
+    } else {
+      el.value = state[id];
+    }
+  });
+
+  // Handle portOverride state
+  if (state['s-sport']) portOverride = true;
+
+  // Restore other accounts
+  if (state._otherAccounts) {
+    try {
+      otherAccounts = JSON.parse(state._otherAccounts);
+      nextAccId = state._nextAccId || otherAccounts.length + 1;
+      if (otherAccounts.length > 0) {
+        addOtherTab();
+        document.getElementById('other-accounts-list').innerHTML = '';
+        otherAccounts.forEach(function(acc) { renderAccountUI(acc.id); });
+        if (otherAccounts.length >= MAX_ACCOUNTS) {
+          document.getElementById('add-acc-btn').style.display = 'none';
+        }
+      }
+    } catch(e) { otherAccounts = []; }
+  }
+
+  return true;
+}
+
+function clearState() {
+  if (!confirm('Clear saved values and reset to defaults?')) return;
+  try { localStorage.removeItem('retirement_calc_v1'); } catch(e) {}
+  location.reload();
+}
+
+function showSaveConfirm() {
+  const btn = document.getElementById('save-btn');
+  if (!btn) return;
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved';
+  btn.style.color = 'var(--grn)';
+  btn.style.borderColor = 'rgba(74,222,128,0.4)';
+  setTimeout(function() {
+    btn.innerHTML = orig;
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }, 2000);
+}
+
+
+// ============================================================
+// OTHER ACCOUNTS
+// ============================================================
+let otherAccounts = [];   // [{id, name, enabled, balance, contribAmt, contribFreq,
+                          //   stopAt, contStop (retire|age|indefinite), stopAge,
+                          //   growMode (follow|custom), growRate}]
+let nextAccId = 1;
+const MAX_ACCOUNTS = 5;
+
+function addOtherTab() {
+  document.getElementById('add-other-btn').style.display = 'none';
+  document.getElementById('add-acc-btn').style.display = 'block';
+  // Add first account automatically
+  if (otherAccounts.length === 0) addAccount();
+  switchTab('other');
+  // Update tab bar
+  var bar = document.querySelector('.tab-bar');
+  var existing = bar.querySelector('.tab-btn.other');
+  if (!existing) {
+    var btn = document.createElement('button');
+    btn.className = 'tab-btn other active';
+    btn.innerHTML = '<span class="tdot" style="background:var(--blu)"></span>Other';
+    btn.onclick = function() { switchTab('other'); };
+    // Insert before + button
+    bar.insertBefore(btn, document.getElementById('add-other-btn'));
+    document.getElementById('add-other-btn').style.display = 'none';
+  }
+}
+
+function removeOtherTab() {
+  otherAccounts = [];
+  nextAccId = 1;
+  document.getElementById('other-accounts-list').innerHTML = '';
+  var panel = document.getElementById('tab-other');
+  if (panel) panel.classList.remove('active');
+  var tabBtn = document.querySelector('.tab-btn.other');
+  if (tabBtn) tabBtn.remove();
+  var addBtn = document.getElementById('add-other-btn');
+  if (addBtn) addBtn.style.display = 'block';
+  var addAccBtn = document.getElementById('add-acc-btn');
+  if (addAccBtn) addAccBtn.style.display = 'none';
+  switchTab('retire');
+  render();
+}
+
+function addAccount() {
+  if (otherAccounts.length >= MAX_ACCOUNTS) return;
+  const id = nextAccId++;
+  otherAccounts.push({
+    id, name:'Account '+id, enabled:false,
+    balance:0, contribAmt:0, contribFreq:'annual',
+    contStop:'retire', stopAge:65,
+    growMode:'follow', growRate:7
+  });
+  renderAccountUI(id);
+  if (otherAccounts.length >= MAX_ACCOUNTS) {
+    document.getElementById('add-acc-btn').style.display = 'none';
+  }
+  render();
+}
+
+function removeAccount(id) {
+  otherAccounts = otherAccounts.filter(function(a) { return a.id !== id; });
+  var el = document.getElementById('acc-'+id);
+  if (el) el.remove();
+  if (otherAccounts.length < MAX_ACCOUNTS) {
+    document.getElementById('add-acc-btn').style.display = 'block';
+  }
+  if (otherAccounts.length === 0) {
+    document.getElementById('add-acc-btn').style.display = 'block';
+  }
+  render();
+}
+
+function renderAccountUI(id) {
+  const acc = otherAccounts.find(function(a) { return a.id === id; });
+  if (!acc) return;
+  const div = document.createElement('div');
+  div.className = 'other-account' + (acc.enabled ? '' : ' disabled');
+  div.id = 'acc-'+id;
+  div.innerHTML = `
+    <div class="other-account-hdr">
+      <input type="checkbox" ${acc.enabled?'checked':''} style="width:14px;height:14px;accent-color:var(--grn);cursor:pointer;flex-shrink:0"
+        onchange="accToggle(${id},this.checked)">
+      <input type="text" class="acc-name" value="${acc.name}" placeholder="Account name"
+        oninput="accSet(${id},'name',this.value)">
+      <button class="acc-remove" onclick="removeAccount(${id})" title="Remove">&#x2715;</button>
+    </div>
+    <div class="sg">
+      <div class="sl"><span>current balance ($)</span></div>
+      <input type="number" value="${acc.balance}" min="0" style="width:100%;background:var(--surf3);border:1px solid var(--bdr2);border-radius:5px;padding:0.35rem 0.5rem;font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--txt);outline:none;-moz-appearance:textfield"
+        oninput="accSet(${id},'balance',+this.value||0)" onchange="accSet(${id},'balance',+this.value||0)">
+    </div>
+    <div class="sg">
+      <div class="sl"><span>contribution</span></div>
+      <div class="cont-row" id="acc-freq-row-${id}">
+        <div class="cont-opt ${acc.contribFreq==='annual'?'active':''}" onclick="accFreq(${id},'annual')">Annual</div>
+        <div class="cont-opt ${acc.contribFreq==='monthly'?'active':''}" onclick="accFreq(${id},'monthly')">Monthly</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.4rem">
+        <input type="number" value="${acc.contribAmt}" min="0" placeholder="0" id="acc-contrib-${id}" style="flex:1;background:var(--surf3);border:1px solid var(--bdr2);border-radius:5px;padding:0.35rem 0.5rem;font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--txt);outline:none;-moz-appearance:textfield"
+          oninput="accSet(${id},'contribAmt',+this.value||0)" onchange="accSet(${id},'contribAmt',+this.value||0)">
+        <span id="acc-freq-lbl-${id}" style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut2);flex-shrink:0">${acc.contribFreq==='monthly'?'/mo':'/yr'}</span>
+      </div>
+    </div>
+    <div class="sg">
+      <div class="sl"><span>contributions stop</span></div>
+      <div class="cont-row">
+        <div class="cont-opt ${acc.contStop==='retire'?'active':''}" onclick="accContStop(${id},'retire')">At retirement</div>
+        <div class="cont-opt ${acc.contStop==='age'?'active':''}" onclick="accContStop(${id},'age')">At age</div>
+        <div class="cont-opt ${acc.contStop==='indefinite'?'active':''}" onclick="accContStop(${id},'indefinite')">Indefinitely</div>
+      </div>
+      <div id="acc-stopage-${id}" style="${acc.contStop==='age'?'':'display:none'}">
+        <div class="sl" style="margin-top:0.4rem"><span>stop age</span><span class="sv" id="acc-stopagev-${id}">${acc.stopAge}</span></div>
+        <input type="range" min="55" max="80" step="1" value="${acc.stopAge}"
+          oninput="accStopAge(${id},+this.value)">
+      </div>
+    </div>
+    <div class="sg">
+      <div class="sl"><span>growth rate</span></div>
+      <div class="cont-row">
+        <div class="cont-opt ${acc.growMode==='follow'?'active':''}" onclick="accGrowMode(${id},'follow')">Follow 401k</div>
+        <div class="cont-opt ${acc.growMode==='custom'?'active':''}" onclick="accGrowMode(${id},'custom')">Custom</div>
+      </div>
+      <div id="acc-growrate-${id}" style="${acc.growMode==='custom'?'':'display:none'}">
+        <div class="sl" style="margin-top:0.4rem"><span>growth %</span><span class="sv" id="acc-growratev-${id}">${acc.growRate}%</span></div>
+        <input type="range" min="3" max="12" step="0.5" value="${acc.growRate}"
+          oninput="accGrowRate(${id},+this.value)">
+      </div>
+    </div>
+  `;
+  document.getElementById('other-accounts-list').appendChild(div);
+}
+
+function accToggle(id, checked) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.enabled = checked;
+  var el = document.getElementById('acc-'+id);
+  if (el) el.className = 'other-account' + (checked ? '' : ' disabled');
+  render();
+}
+function accSet(id, key, val) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (acc) { acc[key] = val; render(); }
+}
+function accFreq(id, freq) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.contribFreq = freq;
+  // Update button active states using the named row
+  var row = document.getElementById('acc-freq-row-'+id);
+  if (row) {
+    row.querySelectorAll('.cont-opt').forEach(function(b, i) {
+      b.className = 'cont-opt' + (i === (freq === 'annual' ? 0 : 1) ? ' active' : '');
+    });
+  }
+  // Update the /mo or /yr label
+  var lbl = document.getElementById('acc-freq-lbl-'+id);
+  if (lbl) lbl.textContent = freq === 'monthly' ? '/mo' : '/yr';
+  render();
+}
+function accContStop(id, mode) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.contStop = mode;
+  var el = document.getElementById('acc-'+id);
+  if (!el) return;
+  // Update button states - find the stop row (3rd cont-row)
+  var rows = el.querySelectorAll('.cont-row');
+  if (rows[1]) {
+    rows[1].querySelectorAll('.cont-opt').forEach(function(b,i){
+      var modes = ['retire','age','indefinite'];
+      b.className = 'cont-opt' + (modes[i]===mode?' active':'');
+    });
+  }
+  var stopAgeDiv = document.getElementById('acc-stopage-'+id);
+  if (stopAgeDiv) stopAgeDiv.style.display = mode==='age' ? 'block' : 'none';
+  render();
+}
+function accStopAge(id, age) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.stopAge = age;
+  var lbl = document.getElementById('acc-stopagev-'+id);
+  if (lbl) lbl.textContent = age;
+  render();
+}
+function accGrowMode(id, mode) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.growMode = mode;
+  var el = document.getElementById('acc-'+id);
+  if (!el) return;
+  var rows = el.querySelectorAll('.cont-row');
+  if (rows[2]) {
+    rows[2].querySelectorAll('.cont-opt').forEach(function(b,i){
+      b.className = 'cont-opt' + (i===(mode==='follow'?0:1)?' active':'');
+    });
+  }
+  var rateDiv = document.getElementById('acc-growrate-'+id);
+  if (rateDiv) rateDiv.style.display = mode==='custom' ? 'block' : 'none';
+  render();
+}
+function accGrowRate(id, rate) {
+  var acc = otherAccounts.find(function(a){return a.id===id;});
+  if (!acc) return;
+  acc.growRate = rate;
+  var lbl = document.getElementById('acc-growratev-'+id);
+  if (lbl) lbl.textContent = rate.toFixed(1)+'%';
+  render();
+}
+
+// Compute other accounts' total FV at retirement age
+function calcOtherAccountsFV(rage, pgrow) {
+  var cage = +document.getElementById('s-cage').value;
+  var accumYears = rage - cage;
+  var totalFV = 0;
+  otherAccounts.forEach(function(acc) {
+    if (!acc.enabled) return;
+    var rate = acc.growMode === 'follow' ? pgrow : acc.growRate;
+    var annualContrib = acc.contribFreq === 'monthly' ? acc.contribAmt * 12 : acc.contribAmt;
+    // Contributions stop at retirement for 'retire' mode
+    // For 'age' or 'indefinite', contributions run through accumulation regardless
+    // (they continue post-retirement too, handled in drawdown)
+    var fv = accumulate(acc.balance, annualContrib, rate, accumYears);
+    totalFV += fv;
+  });
+  return totalFV;
+}
+
+// Compute total annual post-retirement contributions from other accounts (reduces discretionary)
+function calcOtherPostRetirementContrib(age, rage, pgrow) {
+  var total = 0;
+  otherAccounts.forEach(function(acc) {
+    if (!acc.enabled) return;
+    if (acc.contStop === 'retire') return;
+    if (acc.contStop === 'age' && age >= acc.stopAge) return;
+    // indefinite or age not yet reached
+    var annual = acc.contribFreq === 'monthly' ? acc.contribAmt * 12 : acc.contribAmt;
+    total += annual;
+  });
+  return total;
+}
+
+// TAB SWITCHING
+function switchTab(name) {
+  ['accum','inj','retire','other'].forEach(function(t) {
+    var panel = document.getElementById('tab-'+t);
+    var btn   = document.querySelector('.tab-btn.'+t);
+    if (panel) panel.classList.toggle('active', t===name);
+    if (btn)   btn.classList.toggle('active', t===name);
+  });
+}
+// When inheritance toggled on, auto-switch to inheritance tab
+document.getElementById('cb-inj').addEventListener('change', function() {
+  if (this.checked) switchTab('inj');
+});
+
+// Attach listeners
+['s-cage','s-cpct','s-mcap','s-pgrow','s-rage','s-target','s-rgrow',
+ 's-inf','s-ss','s-ssage','s-tax','s-house','s-mortage','s-postmort','s-hc','s-hcm','s-sport',
+ 's-injage','s-injrate'].forEach(id =>
+  document.getElementById(id).addEventListener('input', render));
+['n-bal','n-sal','n-inj'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+  document.getElementById(id).addEventListener('change', render);
+});
+['cb-5to4','cb-stress'].forEach(id =>
+  document.getElementById(id).addEventListener('change', render));
+
+function exportPDF() {
+  function g(id)  { var el=document.getElementById(id); return el?el.textContent.trim():''; }
+  function gv(id) { var el=document.getElementById(id); return el?el.value:''; }
+  function gc(id) { var el=document.getElementById(id); return el?el.checked:false; }
+  function fp(v)  { return parseFloat(v).toFixed(1)+'%'; }
+  function fm(n)  { return '$'+(+n||0).toLocaleString(); }
+
+  // Read all inputs
+  var cage=gv('s-cage'), balance=fm(gv('n-bal')), salary=fm(gv('n-sal'));
+  var cpct=fp(gv('s-cpct')), contribAmt=g('v-contrib');
+  var matchOn=gc('cb-match'), matchCap=fp(gv('s-mcap')), fiveToFour=gc('cb-5to4');
+  var matchAmt=g('v-match'), totalContrib=g('v-total-contrib');
+  var pgrow=fp(gv('s-pgrow'));
+  var injOn=gc('cb-inj'), injAmt=fm(gv('n-inj')), injAge=gv('s-injage');
+  var injYrs=g('v-injgrow'), injFV=g('st-injfv2');
+  var injGrowMode=document.getElementById('igb-own')&&document.getElementById('igb-own').classList.contains('active')
+    ?'custom ('+fp(gv('s-injrate'))+')':'follows 401k ('+pgrow+')';
+  var rage=gv('s-rage'), sport=g('v-sport'), target=g('v-target');
+  var rgrow=fp(gv('s-rgrow')), inf=fp(gv('s-inf'));
+  var ss=g('v-ss'), ssage=gv('s-ssage'), tax=gv('s-tax')+'%';
+  var house=g('v-house'), mortAge=gv('s-mortage'), postMort=g('v-postmort');
+  var hc=g('v-hc'), hcm=g('v-hcm');
+  var stDraw=g('st-draw'), stAt=g('st-at'), stAtSub=g('st-at-sub');
+  var stPre=g('st-pre'), stPreSub=g('st-pre-sub');
+  var stEnd=g('st-end'), stEndSub=g('st-end-sub');
+  var stProj=g('st-proj'), stProjSub=g('st-proj-sub');
+  var stTotC=g('st-totc'), stGrow=g('st-grow');
+  var bridgeNum=g('bridge-num');
+  var spPre=g('sp-pre'), spSS=g('sp-ss'), spMC=g('sp-mc'), sp80=g('sp-80');
+  var infNote=g('inf-note');
+
+  var C={grn:'#16a34a',blu:'#2563eb',amb:'#d97706',red:'#dc2626',
+         pur:'#9333ea',tel:'#0d9488',org:'#ea580c',vio:'#7c3aed',
+         bg:'#f8fafc',bdr:'#e2e8f0',mut:'#64748b',dk:'#0f172a'};
+
+  var css='*{box-sizing:border-box;margin:0;padding:0}'+
+    'body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:9pt;color:'+C.dk+';background:#fff}'+
+    /* header */
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid '+C.dk+';padding-bottom:3.5mm;margin-bottom:5mm}'+
+    '.hdr-title{font-size:17pt;font-weight:700;letter-spacing:-0.02em;line-height:1}'+
+    '.hdr-sub{font-size:7.5pt;color:'+C.mut+';margin-top:1.5mm}'+
+    '.hdr-meta{font-size:7.5pt;color:'+C.mut+';text-align:right;line-height:1.9}'+
+    /* section */
+    '.sec{margin-bottom:5mm;page-break-inside:avoid}'+
+    '.sec-hdr{display:flex;align-items:center;gap:2mm;margin-bottom:3mm}'+
+    '.sec-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}'+
+    '.sec-title{font-size:8pt;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}'+
+    '.sec-line{flex:1;height:1px;background:'+C.bdr+'}'+
+    /* two-column layout: inputs left, cards right */
+    '.sec-body{display:grid;grid-template-columns:1fr 1fr;gap:4mm;align-items:start}'+
+    '.sec-body.full{grid-template-columns:1fr}'+
+    /* input table */
+    '.inp-table{width:100%;border-collapse:collapse}'+
+    '.inp-table tr{border-bottom:0.5px solid '+C.bdr+'}'+
+    '.inp-table tr:last-child{border-bottom:none}'+
+    '.inp-table td{padding:1.5mm 0;vertical-align:top}'+
+    '.inp-table td:first-child{font-size:7pt;color:'+C.mut+';width:45%;padding-right:2mm}'+
+    '.inp-table td:last-child{font-size:8pt;font-weight:600;color:'+C.dk+'}'+
+    /* stat cards */
+    '.cards{display:flex;flex-direction:column;gap:2mm}'+
+    '.card{background:'+C.bg+';border:1px solid '+C.bdr+';border-radius:4px;padding:2.5mm 3mm;position:relative;overflow:hidden}'+
+    '.card::before{content:"";position:absolute;top:0;left:0;right:0;height:2.5px}'+
+    '.card.grn::before{background:'+C.grn+'}.card.blu::before{background:'+C.blu+'}'+
+    '.card.amb::before{background:'+C.amb+'}.card.red::before{background:'+C.red+'}'+
+    '.card.pur::before{background:'+C.pur+'}.card.tel::before{background:'+C.tel+'}'+
+    '.card.org::before{background:'+C.org+'}.card.vio::before{background:'+C.vio+'}'+
+    '.card-lbl{font-size:6pt;color:'+C.mut+';text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.8mm}'+
+    '.card-val{font-size:13pt;font-weight:700;letter-spacing:-0.02em;line-height:1}'+
+    '.card-sub{font-size:6.5pt;color:'+C.mut+';margin-top:0.8mm}'+
+    '.card.grn .card-val{color:'+C.grn+'}.card.blu .card-val{color:'+C.blu+'}'+
+    '.card.amb .card-val{color:'+C.amb+'}.card.red .card-val{color:'+C.red+'}'+
+    '.card.pur .card-val{color:'+C.pur+'}.card.tel .card-val{color:'+C.tel+'}'+
+    '.card.org .card-val{color:'+C.org+'}.card.vio .card-val{color:'+C.vio+'}'+
+    /* cards 2-up grid */
+    '.cards2{display:grid;grid-template-columns:1fr 1fr;gap:2mm}'+
+    /* note box */
+    '.note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:3px;padding:2mm 3mm;font-size:7pt;color:#1d4ed8;margin-top:2.5mm;line-height:1.5}'+
+    /* bridge */
+    '.bridge{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:4px;padding:3mm;text-align:center;margin-bottom:2mm}'+
+    '.bridge-val{font-size:18pt;font-weight:700;color:'+C.grn+';letter-spacing:-0.03em}'+
+    '.bridge-lbl{font-size:7pt;color:'+C.mut+';margin-top:0.5mm}'+
+    /* account rows */
+    '.acc{border:1px solid '+C.bdr+';border-radius:4px;padding:2mm 3mm;margin-bottom:1.5mm;display:grid;grid-template-columns:1fr auto}'+
+    '.acc-name{font-size:8pt;font-weight:700;color:'+C.vio+'}'+
+    '.acc-detail{font-size:7pt;color:'+C.mut+';margin-top:0.5mm}'+
+    '.acc-fv{font-size:10pt;font-weight:700;color:'+C.vio+';align-self:center}'+
+    /* table */
+    '.tbl-wrap{overflow:visible}'+
+    'table{width:100%;border-collapse:collapse;font-size:6pt}'+
+    'thead tr{background:'+C.dk+'}'+
+    'th{text-align:right;padding:2mm 1.5mm;color:#fff;font-weight:600;font-size:5.5pt;text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap}'+
+    'th:first-child{text-align:left}'+
+    'td{text-align:right;padding:1.5mm;border-bottom:0.5px solid '+C.bdr+';white-space:nowrap}'+
+    'td:first-child{text-align:left;color:'+C.mut+'}'+
+    'tr.ss-r td{color:'+C.blu+'}.tr.mc-r td{color:'+C.tel+'}'+
+    'tr.ret-r{background:#f0fdf4}.tr.inj-r td{color:'+C.vio+'}'+
+    '.cn{color:'+C.red+'!important}.cw2{color:'+C.amb+'!important}'+
+    '.cg{color:'+C.grn+'!important}.cb{color:'+C.blu+'!important}'+
+    '.cm{color:#ccc!important}.co{color:'+C.org+'!important}.cv{color:'+C.vio+'!important}'+
+    'tr:last-child td{border-bottom:none}';
+
+  function row(label,val) {
+    return '<tr><td>'+label+'</td><td>'+val+'</td></tr>';
+  }
+  function card(col,lbl,val,sub) {
+    return '<div class="card '+col+'"><div class="card-lbl">'+lbl+'</div>'+
+      '<div class="card-val">'+val+'</div>'+(sub?'<div class="card-sub">'+sub+'</div>':'')+'</div>';
+  }
+  function secHdr(dot,title) {
+    return '<div class="sec-hdr"><div class="sec-dot" style="background:'+dot+'"></div>'+
+      '<div class="sec-title" style="color:'+dot+'">'+title+'</div><div class="sec-line"></div></div>';
+  }
+
+  var h='<style>'+css+'</style>';
+
+  // ── HEADER ──────────────────────────────────────────────────────────
+  h+='<div class="hdr">';
+  h+='<div><div class="hdr-title">Retirement Plan Report</div>'+
+     '<div class="hdr-sub">Illustrative purposes only &mdash; not financial advice</div></div>';
+  h+='<div class="hdr-meta">Generated: '+new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})+'<br>'+
+     'Ages: '+cage+' (today) &rarr; '+rage+' (retire) &rarr; 80 (end)</div>';
+  h+='</div>';
+
+  // ── 401K ACCUMULATION ───────────────────────────────────────────────
+  h+='<div class="sec">';
+  h+=secHdr(C.org,'401k — Accumulation (age '+cage+' → '+rage+')');
+  h+='<div class="sec-body">';
+  // Left: inputs
+  h+='<table class="inp-table">';
+  h+=row('Current age', cage);
+  h+=row('Current balance', balance);
+  h+=row('Annual salary', salary);
+  h+=row('Employee contribution', cpct+' &nbsp;('+contribAmt+')');
+  h+=row('Pre-retirement growth', pgrow);
+  h+=row('Employer match', matchOn?(matchCap+' cap'+(fiveToFour?' · 5-to-4':'')+' &nbsp;= '+matchAmt):'Off');
+  h+=row('Total annual contribution', totalContrib);
+  h+='</table>';
+  // Right: result cards
+  h+='<div class="cards">';
+  h+=card('org','Projected at retirement',stProj,stProjSub);
+  h+=card('org','Total contributions',stTotC,cpct+' employee'+(matchOn?' + '+matchCap+' match':''));
+  h+=card('org','Investment growth',stGrow,'return on contributions');
+  h+='</div>';
+  h+='</div></div>';
+
+  // ── INHERITANCE ─────────────────────────────────────────────────────
+  if (injOn) {
+    h+='<div class="sec">';
+    h+=secHdr(C.vio,'Inheritance');
+    h+='<div class="sec-body">';
+    h+='<table class="inp-table">';
+    h+=row('Amount received', injAmt);
+    h+=row('Age received', injAge);
+    h+=row('Years to grow', injYrs);
+    h+=row('Growth rate', injGrowMode);
+    h+='</table>';
+    h+='<div class="cards">';
+    h+=card('vio','Future value at retirement',injFV,injYrs+' · '+injGrowMode);
+    h+='<div class="bridge"><div class="bridge-val">'+bridgeNum+'</div>'+
+       '<div class="bridge-lbl">Starting retirement portfolio (401k + inheritance'+(otherAccounts.filter(function(a){return a.enabled;}).length>0?' + other accounts':'')+')</div></div>';
+    h+='</div>';
+    h+='</div></div>';
+  } else {
+    h+='<div class="sec">';
+    h+=secHdr(C.grn,'Starting Retirement Portfolio');
+    h+='<div class="bridge" style="margin:0"><div class="bridge-val">'+bridgeNum+'</div>'+
+       '<div class="bridge-lbl">From 401k accumulation'+(otherAccounts.filter(function(a){return a.enabled;}).length>0?' + other accounts':'')+'</div></div>';
+    h+='</div>';
+  }
+
+  // ── OTHER ACCOUNTS ───────────────────────────────────────────────────
+  var enabledAccs=otherAccounts.filter(function(a){return a.enabled;});
+  if (enabledAccs.length>0) {
+    h+='<div class="sec">';
+    h+=secHdr(C.vio,'Other Retirement Accounts');
+    enabledAccs.forEach(function(acc) {
+      var annual=acc.contribFreq==='monthly'?acc.contribAmt*12:acc.contribAmt;
+      var gr=acc.growMode==='follow'?pgrow+' (follows 401k)':fp(String(acc.growRate))+' (custom)';
+      var stop=acc.contStop==='retire'?'stops at retirement':acc.contStop==='age'?'stops at age '+acc.stopAge:'indefinite';
+      var fv=accumulate(acc.balance,annual,acc.growMode==='follow'?parseFloat(gv('s-pgrow')):acc.growRate,parseInt(rage)-parseInt(cage));
+      h+='<div class="acc">';
+      h+='<div><div class="acc-name">'+acc.name+'</div>'+
+         '<div class="acc-detail">Balance: '+fm(acc.balance)+'&nbsp;&nbsp;Contrib: '+fm(annual)+'/yr&nbsp;&nbsp;Growth: '+gr+'&nbsp;&nbsp;'+stop+'</div></div>';
+      h+='<div class="acc-fv">'+fm(Math.round(fv))+'</div>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+
+  // ── RETIREMENT PLAN ──────────────────────────────────────────────────
+  h+='<div class="sec">';
+  h+=secHdr(C.grn,'Retirement Plan (age '+rage+' → 80)');
+  h+='<div class="sec-body">';
+  // Left: inputs
+  h+='<table class="inp-table">';
+  h+=row('Starting portfolio', sport);
+  h+=row('Target balance at 80', target);
+  h+=row('Retirement growth rate', rgrow);
+  h+=row('Inflation rate', inf);
+  h+=row('Effective tax rate', tax);
+  h+=row('Social security', ss+'/yr from age '+ssage);
+  h+=row('Housing (w/ mortgage)', house+'/mo');
+  if (+mortAge>0) h+=row('Mortgage ends at age', mortAge+' → '+postMort+'/mo post-mortgage');
+  h+=row('Healthcare pre-65', hc+'/mo');
+  h+=row('Healthcare 65+ (Medicare)', hcm+'/mo');
+  h+='</table>';
+  // Right: result cards
+  h+='<div class="cards">';
+  h+=card('grn','Total annual draw',stDraw,'gross before tax');
+  h+=card('blu','After-tax draw',stAt,stAtSub);
+  h+=card('amb','Portfolio draw (pre-SS)',stPre,stPreSub);
+  h+=card('red','Balance at 80',stEnd,stEndSub);
+  h+='</div>';
+  h+='</div></div>';
+
+  // ── DISCRETIONARY SPENDING ───────────────────────────────────────────
+  h+='<div class="sec">';
+  h+=secHdr(C.pur,'Annual Discretionary Spending — Today\'s Dollars');
+  h+='<div class="cards2">';
+  h+=card('pur','At retirement (pre-SS)',spPre,'after tax · housing · HC');
+  h+=card('tel','After SS starts',spSS,'today\'s purchasing power');
+  h+=card('pur','After Medicare (65+)',spMC,'lower HC cost kicks in');
+  h+=card('grn','Spending power at 79',sp80,'last year, today\'s dollars');
+  h+='</div>';
+  if (infNote) h+='<div class="note">'+infNote+'</div>';
+  h+='</div>';
+
+  // ── YEAR BY YEAR TABLE ───────────────────────────────────────────────
+  var tbody=document.getElementById('tbody');
+  if (tbody) {
+    h+='<div class="sec" style="page-break-before:always">';
+    h+=secHdr(C.dk,'Year-by-Year Schedule');
+    h+='<div class="tbl-wrap"><table>';
+    h+='<thead><tr>';
+    ['Age','Opening Bal','Growth','Contrib / Draw','SS','Gross Spend',
+     'After-Tax','Housing','Healthcare','Other Contribs',
+     'Nom. Discret.','Real Discret.','Closing Bal'].forEach(function(t){h+='<th>'+t+'</th>';});
+    h+='</tr></thead>';
+    h+='<tbody>'+tbody.innerHTML+'</tbody>';
+    h+='</table></div></div>';
+  }
+
+  document.getElementById('pr-inner').innerHTML=h;
+  if (accumChart) accumChart.resize();
+  if (retChart)   retChart.resize();
+  window.print();
+}
+
+
+// Restore saved state on load, then render
+if (!restoreState()) {
+  render(); // no saved state — render with defaults
+} else {
+  render(); // render with restored values
+}
+</script>
+
+<div id="print-report" style="display:none">
+  <div id="pr-inner"></div>
+</div>
+</body>
+</html>

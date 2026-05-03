@@ -1,0 +1,1521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paycheck Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:1fr 360px;gap:1.25rem;align-items:start}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}}
+.right{display:flex;flex-direction:column;gap:1.25rem;position:sticky;top:5rem}
+/* Tabs */
+.tab-nav{display:flex;border-bottom:2px solid var(--bdr);margin-bottom:1.25rem;gap:0}
+.tab-nav-btn{padding:0.6rem 1.1rem;font-family:'DM Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--mut);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-2px;transition:all 0.15s;white-space:nowrap}
+.tab-nav-btn.active{color:var(--grn);border-bottom-color:var(--grn)}
+.tab-nav-btn:hover{color:var(--txt)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+/* Earnings rows */
+.earn-row{display:grid;grid-template-columns:140px 130px 1fr auto;gap:0.5rem;align-items:start;margin-bottom:0.75rem;padding-bottom:0.75rem;border-bottom:1px solid var(--bdr)}
+.earn-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+/* Person tabs */
+.person-toggle{display:flex;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;margin-bottom:1.25rem;width:fit-content}
+.person-btn{padding:0.45rem 1rem;font-family:'DM Mono',monospace;font-size:0.72rem;background:var(--surf2);color:var(--mut2);border:none;cursor:pointer;transition:all 0.15s}
+.person-btn.active{background:rgba(74,222,128,0.1);color:var(--grn)}
+/* Benefit row */
+.benefit-row{display:grid;grid-template-columns:1fr 110px 80px;gap:0.5rem;align-items:center;margin-bottom:0.5rem}
+/* Summary row */
+.srow{display:flex;justify-content:space-between;align-items:baseline;padding:0.38rem 0;border-bottom:1px solid var(--bdr);font-family:'DM Mono',monospace;font-size:0.75rem}
+.srow:last-child{border-bottom:none}
+/* Raise slider */
+.raise-wrap{background:var(--surf2);border:1px solid var(--bdr);border-radius:10px;padding:1rem 1.25rem}
+/* Tax badge */
+.tax-badge{display:inline-flex;align-items:center;padding:0.15rem 0.5rem;border-radius:10px;font-family:'DM Mono',monospace;font-size:0.62rem;cursor:pointer;transition:all 0.15s;user-select:none}
+.tax-badge.pretax{background:rgba(74,222,128,0.1);color:var(--grn);border:1px solid rgba(74,222,128,0.3)}
+.tax-badge.posttax{background:rgba(248,113,113,0.1);color:var(--red);border:1px solid rgba(248,113,113,0.3)}
+/* Section header */
+.sec-h{font-size:0.95rem;font-weight:700;letter-spacing:-0.01em;margin-bottom:0.75rem;color:var(--txt)}
+.sec-sub{font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-bottom:1rem;line-height:1.5}
+/* Radio */
+.radio-row{display:flex;gap:1.25rem;align-items:center;margin-bottom:0.75rem}
+.radio-opt{display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--mut2)}
+.radio-opt input[type=radio]{accent-color:var(--grn);width:14px;height:14px;cursor:pointer}
+tfoot tr td{font-family:'DM Mono',monospace;font-size:0.73rem;padding:0.5rem 0.5rem;border-top:2px solid var(--bdr2);background:var(--surf2)}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .right{position:static !important}
+  .earn-row{grid-template-columns:1fr 1fr auto !important;flex-wrap:wrap}
+  .earn-row > *:nth-child(2){display:none}
+  .benefit-row{grid-template-columns:1fr 90px 70px !important}
+  .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none}
+  .tab-nav::-webkit-scrollbar{display:none}
+  .tab-nav-btn{white-space:nowrap;flex-shrink:0;font-size:0.58rem;padding:0.5rem 0.5rem}
+  .person-toggle{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('paycheck')</script>
+
+<div class="page">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Paycheck Calculator</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">earnings · federal taxes · state taxes · benefits · take-home</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- PERSON TOGGLE -->
+  <div class="person-toggle">
+    <button class="person-btn active" id="pb-1" onclick="setPerson(1)">Person 1</button>
+    <button class="person-btn" id="pb-2" onclick="setPerson(2)">+ Add Spouse / Person 2</button>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: INPUTS -->
+    <div>
+      <!-- SECTION TABS -->
+      <div class="tab-nav">
+        <button class="tab-nav-btn active" onclick="setTab('earnings')">Earnings</button>
+        <button class="tab-nav-btn" onclick="setTab('federal')">Federal Taxes</button>
+        <button class="tab-nav-btn" onclick="setTab('state')">State Taxes</button>
+        <button class="tab-nav-btn" onclick="setTab('benefits')">Benefits</button>
+        <button class="tab-nav-btn" onclick="setTab('self-employ')">1099 / Self-Emp</button>
+        <button class="tab-nav-btn" onclick="setTab('schedule')">Pay Schedule</button>
+      </div>
+
+      <!-- EARNINGS TAB -->
+      <div class="tab-pane active" id="tab-earnings">
+        <div class="panel" style="margin-bottom:1rem">
+          <div class="sec-h">How often are you paid?</div>
+          <div class="g2" style="gap:0.5rem;max-width:400px">
+            <div class="field">
+              <label>Pay Frequency</label>
+              <select class="input-bare" id="pay-freq" onchange="render()">
+                <option value="52">Weekly (52×/yr)</option>
+                <option value="26" selected>Bi-weekly (26×/yr)</option>
+                <option value="24">Semi-monthly (24×/yr)</option>
+                <option value="12">Monthly (12×/yr)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Pay Date</label>
+              <input type="date" id="pay-date" class="input-bare" oninput="render()">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:1rem">
+          <div class="sec-h">How are you paid?</div>
+          <div style="display:grid;grid-template-columns:140px 130px 1fr auto;gap:0.5rem;margin-bottom:0.4rem">
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Type</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Method</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Amount</div>
+            <div></div>
+          </div>
+          <div id="earnings-list"></div>
+          <button class="btn" onclick="addEarning()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.25rem">+ Add Another</button>
+        </div>
+
+        <div class="panel" id="overtime-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+            <div class="sec-h" style="margin:0">Any Overtime?</div>
+            <label class="tog"><input type="checkbox" id="ot-toggle" onchange="toggleOvertime()"><div class="tog-tr"></div><div class="tog-th"></div></label>
+          </div>
+          <div id="overtime-fields" style="display:none">
+            <div id="overtime-list"></div>
+            <button class="btn" onclick="addOvertime()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.25rem">+ Add Another</button>
+          </div>
+          <div style="font-size:0.67rem;font-family:'DM Mono',monospace;color:var(--mut)">Overtime calculated at 1.5× hourly rate, or enter a custom amount.</div>
+        </div>
+      </div>
+
+      <!-- FEDERAL TAXES TAB -->
+      <div class="tab-pane" id="tab-federal">
+        <div class="panel">
+          <div class="sec-h">Federal Tax Withholding (W-4)</div>
+          <div class="field" style="margin-bottom:0.75rem;max-width:320px">
+            <label>Use pre-2020 W-4 (allowances)?</label>
+            <div class="radio-row">
+              <label class="radio-opt"><input type="radio" name="w4ver" value="new" checked onchange="toggleW4()"> 2020+ W-4</label>
+              <label class="radio-opt"><input type="radio" name="w4ver" value="old" onchange="toggleW4()"> Pre-2020 W-4</label>
+            </div>
+          </div>
+
+          <!-- 2020+ W-4 fields -->
+          <div id="w4-new">
+            <div class="field" style="margin-bottom:0.75rem;max-width:320px">
+              <label>Filing Status</label>
+              <select class="input-bare" id="fed-filing" onchange="render()">
+                <option value="single">Single / Married Filing Separately</option>
+                <option value="mfj">Married Filing Jointly</option>
+                <option value="hoh">Head of Household</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0.75rem">
+              <label>Multiple jobs or spouse works?</label>
+              <div class="radio-row">
+                <label class="radio-opt"><input type="radio" name="multi-job" value="no" checked onchange="render()"> No</label>
+                <label class="radio-opt"><input type="radio" name="multi-job" value="yes" onchange="render()"> Yes</label>
+              </div>
+            </div>
+            <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+              <div class="field"><label>Dependent amount ($)</label><div class="input-wrap"><input type="number" id="dep-amount" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+              <div class="field"><label>Other income ($)</label><div class="input-wrap"><input type="number" id="other-income-fed" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            </div>
+            <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+              <div class="field"><label>Deductions ($)</label><div class="input-wrap"><input type="number" id="fed-deductions" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+              <div class="field"><label>Additional withholding ($/period)</label><div class="input-wrap"><input type="number" id="extra-withholding" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            </div>
+            <div class="field" style="margin-bottom:0.5rem">
+              <label>Are you a nonresident alien?</label>
+              <div class="radio-row">
+                <label class="radio-opt"><input type="radio" name="nra" value="no" checked onchange="render()"> No</label>
+                <label class="radio-opt"><input type="radio" name="nra" value="yes" onchange="render()"> Yes</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pre-2020 W-4 fields -->
+          <div id="w4-old" style="display:none">
+            <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+              <div class="field"><label>Allowances</label><div class="input-wrap"><input type="number" id="allowances" value="1" min="0" max="20" oninput="render()"></div></div>
+              <div class="field"><label>Additional withholding ($/period)</label><div class="input-wrap"><input type="number" id="extra-withholding-old" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            </div>
+            <div class="field" style="margin-bottom:0.75rem;max-width:320px">
+              <label>Filing Status</label>
+              <select class="input-bare" id="fed-filing-old" onchange="render()">
+                <option value="single">Single</option>
+                <option value="mfj">Married</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--bdr);padding-top:0.75rem;margin-top:0.25rem">
+            <div class="field" style="margin-bottom:0.4rem">
+              <label>Exempt from Federal Income Tax Withholding?</label>
+              <div class="radio-row"><label class="radio-opt"><input type="radio" name="fed-exempt" value="no" checked onchange="render()"> No</label><label class="radio-opt"><input type="radio" name="fed-exempt" value="yes" onchange="render()"> Yes (exempt)</label></div>
+            </div>
+            <div class="field" style="margin-bottom:0.4rem">
+              <label>Exempt from Social Security Tax?</label>
+              <div class="radio-row"><label class="radio-opt"><input type="radio" name="ss-exempt" value="no" checked onchange="render()"> No</label><label class="radio-opt"><input type="radio" name="ss-exempt" value="yes" onchange="render()"> Yes (exempt)</label></div>
+            </div>
+            <div class="field">
+              <label>Exempt from Medicare Tax?</label>
+              <div class="radio-row"><label class="radio-opt"><input type="radio" name="med-exempt" value="no" checked onchange="render()"> No</label><label class="radio-opt"><input type="radio" name="med-exempt" value="yes" onchange="render()"> Yes (exempt)</label></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE TAXES TAB -->
+      <div class="tab-pane" id="tab-state">
+        <div class="panel">
+          <div class="sec-h">State &amp; Local Taxes</div>
+          <div class="g2" style="gap:0.5rem;margin-bottom:0.75rem">
+            <div class="field">
+              <label>State / Territory</label>
+              <select class="input-bare" id="state-select" onchange="onStateChange()"></select>
+            </div>
+            <div class="field">
+              <label>Filing Status (State)</label>
+              <select class="input-bare" id="state-filing" onchange="render()">
+                <option value="single">Single</option>
+                <option value="mfj">Married Filing Jointly</option>
+                <option value="mfs">Married Filing Separately</option>
+                <option value="hoh">Head of Household</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:0.75rem">
+            <label>Do you live in a different state than you work?</label>
+            <div class="radio-row">
+              <label class="radio-opt"><input type="radio" name="diff-state" value="no" checked onchange="toggleDiffState()"> No</label>
+              <label class="radio-opt"><input type="radio" name="diff-state" value="yes" onchange="toggleDiffState()"> Yes</label>
+            </div>
+          </div>
+          <div id="resident-state-field" style="display:none;margin-bottom:0.75rem">
+            <div class="field">
+              <label>Resident State (where you live)</label>
+              <select class="input-bare" id="resident-state" onchange="render()"></select>
+            </div>
+          </div>
+          <div id="state-specific-fields"></div>
+          <div id="sdi-field" style="display:none;margin-top:0.75rem">
+            <div class="field">
+              <label>State Disability Insurance (SDI) — auto-calculated for your state</label>
+              <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--tel)" id="sdi-note"></div>
+            </div>
+          </div>
+          <div class="field" style="margin-top:0.75rem">
+            <label>Exempt from State Income Tax?</label>
+            <div class="radio-row"><label class="radio-opt"><input type="radio" name="state-exempt" value="no" checked onchange="render()"> No</label><label class="radio-opt"><input type="radio" name="state-exempt" value="yes" onchange="render()"> Yes (exempt)</label></div>
+          </div>
+          <div class="field" style="margin-top:0.5rem">
+            <label>Additional State Withholding ($/period)</label>
+            <div class="input-wrap" style="max-width:200px"><input type="number" id="state-extra-wh" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BENEFITS TAB -->
+      <div class="tab-pane" id="tab-benefits">
+        <div class="panel">
+          <div class="sec-h">Benefits &amp; Deductions</div>
+          <div class="sec-sub">Toggle each benefit as Pre-tax (reduces taxable income) or Post-tax. Pre-tax benefits reduce federal and state taxable wages.</div>
+          <div style="display:grid;grid-template-columns:1fr 110px 80px;gap:0.5rem;margin-bottom:0.4rem">
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Benefit / Deduction</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-align:right">Per Period ($)</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-align:center">Tax Treatment</div>
+          </div>
+          <div id="benefits-list"></div>
+          <button class="btn" onclick="addBenefit()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.5rem">+ Add Benefit</button>
+          <div style="border-top:1px solid var(--bdr);margin-top:0.75rem;padding-top:0.75rem">
+            <div class="field">
+              <label>Send 401k/403b contributions to Retirement Planner?</label>
+              <div class="tog-row" style="margin-top:0.3rem">
+                <label class="tog"><input type="checkbox" id="sync-retirement" onchange="syncToRetirement()"><div class="tog-tr"></div><div class="tog-th"></div></label>
+                <span class="tog-lb">Sync to Retirement Calculator</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1099 / SELF-EMPLOYMENT TAB -->
+      <div class="tab-pane" id="tab-self-employ">
+        <div class="panel">
+          <div class="sec-h">1099 / Self-Employment Income</div>
+          <div class="sec-sub">Self-employment income is subject to SE tax (15.3% on 92.35% of net earnings). Half of SE tax is deductible. Quarterly estimated payments required if you expect to owe $1,000+.</div>
+          <div style="display:grid;grid-template-columns:1fr 110px 110px auto;gap:0.5rem;margin-bottom:0.35rem">
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Label / Source</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Income ($)</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Expenses ($)</div>
+            <div></div>
+          </div>
+          <div id="se-list"></div>
+          <button class="btn" onclick="addSELine()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.25rem;margin-bottom:0.75rem">+ Add 1099 Source</button>
+          <div id="se-results"></div>
+        </div>
+      </div>
+
+      <!-- PAY SCHEDULE TAB -->
+      <div class="tab-pane" id="tab-schedule">
+        <div class="panel">
+          <div class="sec-h">Pay Schedule</div>
+          <div class="sec-sub">Generate your full-year pay schedule. Select your first pay date and the system calculates all remaining dates automatically.</div>
+
+          <!-- Person 1 schedule config -->
+          <div style="margin-bottom:1.25rem">
+            <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--grn);font-weight:600;margin-bottom:0.6rem;text-transform:uppercase;letter-spacing:0.08em">Person 1</div>
+            <div id="sched-config-1"></div>
+          </div>
+
+          <!-- Person 2 schedule config (shown when activated) -->
+          <div id="sched-p2-wrap" style="display:none;margin-bottom:1.25rem;padding-top:1rem;border-top:1px solid var(--bdr)">
+            <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--blu);font-weight:600;margin-bottom:0.6rem;text-transform:uppercase;letter-spacing:0.08em">Person 2 (Spouse)</div>
+            <div id="sched-config-2"></div>
+          </div>
+
+          <!-- View toggle -->
+          <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+            <div class="person-toggle" style="margin:0">
+              <button class="person-btn active" id="svb-1" onclick="setSchedView('p1')">Person 1</button>
+              <button class="person-btn" id="svb-2" onclick="setSchedView('p2')">Person 2</button>
+              <button class="person-btn" id="svb-combined" onclick="setSchedView('combined')">Combined</button>
+            </div>
+            <button class="btn grn" onclick="exportSchedXLS()" style="margin-left:auto">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export Schedule
+            </button>
+            <button class="btn blu" onclick="importToBudget()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/></svg>
+              Send to Budget
+            </button>
+            <span id="budget-import-status" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--grn);display:none"></span>
+          </div>
+
+          <!-- Schedule table -->
+          <div class="table-wrap">
+            <table id="sched-table">
+              <thead><tr id="sched-thead"></tr></thead>
+              <tbody id="sched-tbody"></tbody>
+              <tfoot><tr id="sched-tfoot"></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RAISE SLIDER -->
+      <div class="raise-wrap" style="margin-top:1.25rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+          <div style="font-size:0.78rem;font-weight:600">Raise Preview</div>
+          <div style="font-family:'DM Mono',monospace;font-size:0.85rem;font-weight:700;color:var(--grn)" id="raise-pct-lbl">+0.0%</div>
+        </div>
+        <input type="range" id="raise-slider" min="0" max="15" step="0.5" value="0" oninput="onRaiseSlider()" style="width:100%">
+        <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.62rem;color:var(--mut);margin-top:0.25rem"><span>0%</span><span>15%</span></div>
+        <div id="raise-preview" style="margin-top:0.75rem;display:none"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: RESULTS -->
+    <div class="right">
+      <!-- VIEW TOGGLE -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+        <div style="font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.08em">View</div>
+        <div class="person-toggle" style="margin:0">
+          <button class="person-btn active" id="vb-individual" onclick="setView('individual')">Individual</button>
+          <button class="person-btn" id="vb-combined" onclick="setView('combined')">Combined</button>
+        </div>
+      </div>
+      <!-- TAKE HOME DONUT -->
+      <div class="panel" style="display:flex;flex-direction:column;align-items:center;gap:0.75rem">
+        <div style="position:relative;width:200px;height:200px">
+          <canvas id="donut-chart" role="img" aria-label="Take home breakdown donut"></canvas>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-transform:uppercase;letter-spacing:0.08em">Take Home</div>
+            <div style="font-size:1.2rem;font-weight:700;color:var(--grn)" id="donut-center">—</div>
+            <div style="font-size:0.62rem;font-family:'DM Mono',monospace;color:var(--mut)" id="donut-center-sub">per period</div>
+          </div>
+        </div>
+        <div id="donut-legend" style="width:100%;font-size:0.7rem;font-family:'DM Mono',monospace;color:var(--mut)"></div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div class="g2">
+        <div class="card grn"><div class="card-lb">Annual Take-Home</div><div class="card-v" id="st-annual-net">—</div></div>
+        <div class="card red"><div class="card-lb">Annual Taxes</div><div class="card-v" id="st-annual-tax">—</div></div>
+        <div class="card blu"><div class="card-lb">Effective Tax Rate</div><div class="card-v" id="st-eff-rate">—</div></div>
+        <div class="card amb"><div class="card-lb">Marginal Rate</div><div class="card-v" id="st-marginal">—</div></div>
+      </div>
+
+      <!-- PER-PERIOD BREAKDOWN -->
+      <div class="panel">
+        <div class="sect-title" id="period-title">Per Paycheck Breakdown</div>
+        <div id="period-breakdown"></div>
+      </div>
+
+      <!-- ANNUAL BREAKDOWN -->
+      <div class="panel">
+        <div class="sect-title">Annual Breakdown</div>
+        <div id="annual-breakdown"></div>
+      </div>
+
+      <!-- TAX BRACKET CHART -->
+      <div class="panel">
+        <div class="sect-title">Tax Bracket Visualization</div>
+        <div style="position:relative;width:100%;height:200px">
+          <canvas id="bracket-chart" role="img" aria-label="Tax bracket bar chart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// 2025 TAX DATA
+// ============================================================
+
+const FEDERAL = {
+  brackets: {
+    single: [{min:0,max:11925,rate:.10},{min:11925,max:48475,rate:.12},{min:48475,max:103350,rate:.22},{min:103350,max:197300,rate:.24},{min:197300,max:250525,rate:.32},{min:250525,max:626350,rate:.35},{min:626350,max:Infinity,rate:.37}],
+    mfj:    [{min:0,max:23850,rate:.10},{min:23850,max:96950,rate:.12},{min:96950,max:206700,rate:.22},{min:206700,max:394600,rate:.24},{min:394600,max:501050,rate:.32},{min:501050,max:751600,rate:.35},{min:751600,max:Infinity,rate:.37}],
+    mfs:    [{min:0,max:11925,rate:.10},{min:11925,max:48475,rate:.12},{min:48475,max:103350,rate:.22},{min:103350,max:197300,rate:.24},{min:197300,max:250525,rate:.32},{min:250525,max:313200,rate:.35},{min:313200,max:Infinity,rate:.37}],
+    hoh:    [{min:0,max:17000,rate:.10},{min:17000,max:64850,rate:.12},{min:64850,max:103350,rate:.22},{min:103350,max:197300,rate:.24},{min:197300,max:250500,rate:.32},{min:250500,max:626350,rate:.35},{min:626350,max:Infinity,rate:.37}],
+  },
+  stdDed:   {single:15000,mfj:30000,mfs:15000,hoh:22500},
+  ssWageBase: 176100,
+  ssRate:     0.062,
+  medicareRate: 0.0145,
+  addlMedicareRate: 0.009,
+  addlMedicareThreshold: {single:200000,mfj:250000,mfs:125000,hoh:200000},
+  allowanceAmt2024: 4300, // per allowance per year (pre-2020 W-4)
+};
+
+// State tax data — 2025 rates
+// Format: {type:'bracket'|'flat'|'none', brackets:{single:[],mfj:[],...}|rate:n, stdDed:{}, sdi:{rate,wageBase|null}, note}
+const STATES = {
+  'AL':{'name':'Alabama','type':'bracket','brackets':{'single':[{min:0,max:500,rate:.02},{min:500,max:3000,rate:.04},{min:3000,max:Infinity,rate:.05}],'mfj':[{min:0,max:1000,rate:.02},{min:1000,max:6000,rate:.04},{min:6000,max:Infinity,rate:.05}]},'stdDed':{'single':3000,'mfj':8500},'sdi':null},
+  'AK':{'name':'Alaska','type':'none','sdi':null},
+  'AZ':{'name':'Arizona','type':'flat','rate':0.025,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'AR':{'name':'Arkansas','type':'bracket','brackets':{'single':[{min:0,max:5099,rate:.02},{min:5099,max:10299,rate:.04},{min:10299,max:Infinity,rate:.047}],'mfj':[{min:0,max:5099,rate:.02},{min:5099,max:10299,rate:.04},{min:10299,max:Infinity,rate:.047}]},'stdDed':{'single':2340,'mfj':4680},'sdi':null},
+  'CA':{'name':'California','type':'bracket','brackets':{'single':[{min:0,max:10756,rate:.01},{min:10756,max:25499,rate:.02},{min:25499,max:40245,rate:.04},{min:40245,max:55866,rate:.06},{min:55866,max:70606,rate:.08},{min:70606,max:360659,rate:.093},{min:360659,max:432787,rate:.103},{min:432787,max:721314,rate:.113},{min:721314,max:Infinity,rate:.123}],'mfj':[{min:0,max:21512,rate:.01},{min:21512,max:50998,rate:.02},{min:50998,max:80490,rate:.04},{min:80490,max:111732,rate:.06},{min:111732,max:141212,rate:.08},{min:141212,max:721318,rate:.093},{min:721318,max:865574,rate:.103},{min:865574,max:1442628,rate:.113},{min:1442628,max:Infinity,rate:.123}]},'stdDed':{'single':5540,'mfj':11080},'sdi':{'rate':0.009,'wageBase':null,'label':'CA SDI (0.9%)'}},
+  'CO':{'name':'Colorado','type':'flat','rate':0.044,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'CT':{'name':'Connecticut','type':'bracket','brackets':{'single':[{min:0,max:10000,rate:.03},{min:10000,max:50000,rate:.05},{min:50000,max:100000,rate:.055},{min:100000,max:200000,rate:.06},{min:200000,max:250000,rate:.065},{min:250000,max:500000,rate:.069},{min:500000,max:Infinity,rate:.0699}],'mfj':[{min:0,max:20000,rate:.03},{min:20000,max:100000,rate:.05},{min:100000,max:200000,rate:.055},{min:200000,max:400000,rate:.06},{min:400000,max:500000,rate:.065},{min:500000,max:1000000,rate:.069},{min:1000000,max:Infinity,rate:.0699}]},'stdDed':{'single':0,'mfj':0},'sdi':null},
+  'DE':{'name':'Delaware','type':'bracket','brackets':{'single':[{min:0,max:2000,rate:0},{min:2000,max:5000,rate:.022},{min:5000,max:10000,rate:.039},{min:10000,max:20000,rate:.048},{min:20000,max:25000,rate:.052},{min:25000,max:60000,rate:.0555},{min:60000,max:Infinity,rate:.066}],'mfj':[{min:0,max:2000,rate:0},{min:2000,max:5000,rate:.022},{min:5000,max:10000,rate:.039},{min:10000,max:20000,rate:.048},{min:20000,max:25000,rate:.052},{min:25000,max:60000,rate:.0555},{min:60000,max:Infinity,rate:.066}]},'stdDed':{'single':3250,'mfj':6500},'sdi':null},
+  'FL':{'name':'Florida','type':'none','sdi':null},
+  'GA':{'name':'Georgia','type':'flat','rate':0.0549,'stdDed':{'single':12000,'mfj':24000},'sdi':null},
+  'HI':{'name':'Hawaii','type':'bracket','brackets':{'single':[{min:0,max:2400,rate:.014},{min:2400,max:4800,rate:.032},{min:4800,max:9600,rate:.055},{min:9600,max:14400,rate:.064},{min:14400,max:19200,rate:.068},{min:19200,max:24000,rate:.072},{min:24000,max:48000,rate:.076},{min:48000,max:150000,rate:.079},{min:150000,max:175000,rate:.0825},{min:175000,max:200000,rate:.09},{min:200000,max:Infinity,rate:.11}],'mfj':[{min:0,max:4800,rate:.014},{min:4800,max:9600,rate:.032},{min:9600,max:19200,rate:.055},{min:19200,max:28800,rate:.064},{min:28800,max:38400,rate:.068},{min:38400,max:48000,rate:.072},{min:48000,max:96000,rate:.076},{min:96000,max:300000,rate:.079},{min:300000,max:350000,rate:.0825},{min:350000,max:400000,rate:.09},{min:400000,max:Infinity,rate:.11}]},'stdDed':{'single':2200,'mfj':4400},'sdi':{'rate':0.005,'wageBase':null,'label':'HI TDI (~0.5%)'}},
+  'ID':{'name':'Idaho','type':'flat','rate':0.058,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'IL':{'name':'Illinois','type':'flat','rate':0.0495,'stdDed':{'single':0,'mfj':0},'sdi':null},
+  'IN':{'name':'Indiana','type':'flat','rate':0.0305,'stdDed':{'single':1000,'mfj':2000},'sdi':null},
+  'IA':{'name':'Iowa','type':'flat','rate':0.038,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'KS':{'name':'Kansas','type':'bracket','brackets':{'single':[{min:0,max:15000,rate:.031},{min:15000,max:30000,rate:.0525},{min:30000,max:Infinity,rate:.057}],'mfj':[{min:0,max:30000,rate:.031},{min:30000,max:60000,rate:.0525},{min:60000,max:Infinity,rate:.057}]},'stdDed':{'single':3500,'mfj':8000},'sdi':null},
+  'KY':{'name':'Kentucky','type':'flat','rate':0.04,'stdDed':{'single':3160,'mfj':3160},'sdi':null},
+  'LA':{'name':'Louisiana','type':'bracket','brackets':{'single':[{min:0,max:12500,rate:.0185},{min:12500,max:50000,rate:.035},{min:50000,max:Infinity,rate:.0425}],'mfj':[{min:0,max:25000,rate:.0185},{min:25000,max:100000,rate:.035},{min:100000,max:Infinity,rate:.0425}]},'stdDed':{'single':4500,'mfj':9000},'sdi':null},
+  'ME':{'name':'Maine','type':'bracket','brackets':{'single':[{min:0,max:26050,rate:.058},{min:26050,max:61600,rate:.0675},{min:61600,max:Infinity,rate:.0715}],'mfj':[{min:0,max:52100,rate:.058},{min:52100,max:123250,rate:.0675},{min:123250,max:Infinity,rate:.0715}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'MD':{'name':'Maryland','type':'bracket','brackets':{'single':[{min:0,max:1000,rate:.02},{min:1000,max:2000,rate:.03},{min:2000,max:3000,rate:.04},{min:3000,max:100000,rate:.0475},{min:100000,max:125000,rate:.05},{min:125000,max:150000,rate:.0525},{min:150000,max:250000,rate:.055},{min:250000,max:Infinity,rate:.0575}],'mfj':[{min:0,max:1000,rate:.02},{min:1000,max:2000,rate:.03},{min:2000,max:3000,rate:.04},{min:3000,max:150000,rate:.0475},{min:150000,max:175000,rate:.05},{min:175000,max:225000,rate:.0525},{min:225000,max:300000,rate:.055},{min:300000,max:Infinity,rate:.0575}]},'stdDed':{'single':2400,'mfj':4850},'sdi':null},
+  'MA':{'name':'Massachusetts','type':'flat','rate':0.05,'stdDed':{'single':4400,'mfj':8800},'sdi':{'rate':0.00756,'wageBase':null,'label':'MA PFML (0.756%)'}},
+  'MI':{'name':'Michigan','type':'flat','rate':0.0425,'stdDed':{'single':5600,'mfj':11200},'sdi':null},
+  'MN':{'name':'Minnesota','type':'bracket','brackets':{'single':[{min:0,max:31690,rate:.0535},{min:31690,max:104090,rate:.068},{min:104090,max:193240,rate:.0785},{min:193240,max:Infinity,rate:.0985}],'mfj':[{min:0,max:46330,rate:.0535},{min:46330,max:184040,rate:.068},{min:184040,max:321450,rate:.0785},{min:321450,max:Infinity,rate:.0985}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'MS':{'name':'Mississippi','type':'flat','rate':0.047,'stdDed':{'single':2300,'mfj':4600},'sdi':null},
+  'MO':{'name':'Missouri','type':'bracket','brackets':{'single':[{min:0,max:1207,rate:.02},{min:1207,max:2414,rate:.025},{min:2414,max:3622,rate:.03},{min:3622,max:4829,rate:.035},{min:4829,max:6036,rate:.04},{min:6036,max:7243,rate:.045},{min:7243,max:8450,rate:.05},{min:8450,max:9657,rate:.055},{min:9657,max:Infinity,rate:.048}],'mfj':[{min:0,max:1207,rate:.02},{min:1207,max:2414,rate:.025},{min:2414,max:3622,rate:.03},{min:3622,max:4829,rate:.035},{min:4829,max:6036,rate:.04},{min:6036,max:7243,rate:.045},{min:7243,max:8450,rate:.05},{min:8450,max:9657,rate:.055},{min:9657,max:Infinity,rate:.048}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'MT':{'name':'Montana','type':'flat','rate':0.059,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'NE':{'name':'Nebraska','type':'bracket','brackets':{'single':[{min:0,max:3700,rate:.0246},{min:3700,max:22170,rate:.0351},{min:22170,max:35730,rate:.0501},{min:35730,max:Infinity,rate:.0664}],'mfj':[{min:0,max:7390,rate:.0246},{min:7390,max:44350,rate:.0351},{min:44350,max:71470,rate:.0501},{min:71470,max:Infinity,rate:.0664}]},'stdDed':{'single':7900,'mfj':15800},'sdi':null},
+  'NV':{'name':'Nevada','type':'none','sdi':null},
+  'NH':{'name':'New Hampshire','type':'none','sdi':null},
+  'NJ':{'name':'New Jersey','type':'bracket','brackets':{'single':[{min:0,max:20000,rate:.014},{min:20000,max:35000,rate:.0175},{min:35000,max:40000,rate:.035},{min:40000,max:75000,rate:.05525},{min:75000,max:500000,rate:.0637},{min:500000,max:1000000,rate:.0897},{min:1000000,max:Infinity,rate:.1075}],'mfj':[{min:0,max:20000,rate:.014},{min:20000,max:50000,rate:.0175},{min:50000,max:70000,rate:.0245},{min:70000,max:80000,rate:.035},{min:80000,max:150000,rate:.05525},{min:150000,max:500000,rate:.0637},{min:500000,max:1000000,rate:.0897},{min:1000000,max:Infinity,rate:.1075}]},'stdDed':{'single':0,'mfj':0},'sdi':{'rate':0.0090,'wageBase':161400,'label':'NJ SDI/FLI (0.90%)'}},
+  'NM':{'name':'New Mexico','type':'bracket','brackets':{'single':[{min:0,max:5500,rate:.017},{min:5500,max:11000,rate:.032},{min:11000,max:16000,rate:.047},{min:16000,max:210000,rate:.049},{min:210000,max:Infinity,rate:.059}],'mfj':[{min:0,max:8000,rate:.017},{min:8000,max:16000,rate:.032},{min:16000,max:24000,rate:.047},{min:24000,max:315000,rate:.049},{min:315000,max:Infinity,rate:.059}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'NY':{'name':'New York','type':'bracket','brackets':{'single':[{min:0,max:17150,rate:.04},{min:17150,max:23600,rate:.045},{min:23600,max:27900,rate:.0525},{min:27900,max:161550,rate:.0585},{min:161550,max:323200,rate:.0625},{min:323200,max:2155350,rate:.0685},{min:2155350,max:Infinity,rate:.0965}],'mfj':[{min:0,max:27900,rate:.04},{min:27900,max:43000,rate:.045},{min:43000,max:161550,rate:.0525},{min:161550,max:323200,rate:.0585},{min:323200,max:2155350,rate:.0625},{min:2155350,max:Infinity,rate:.0685}]},'stdDed':{'single':8000,'mfj':16050},'sdi':{'rate':0.005,'wageBase':null,'label':'NY SDI (~0.5%, capped $31.20/yr)'}},
+  'NC':{'name':'North Carolina','type':'flat','rate':0.045,'stdDed':{'single':12750,'mfj':25500},'sdi':null},
+  'ND':{'name':'North Dakota','type':'bracket','brackets':{'single':[{min:0,max:44725,rate:.011},{min:44725,max:225975,rate:.0204},{min:225975,max:Infinity,rate:.0264}],'mfj':[{min:0,max:74750,rate:.011},{min:74750,max:275925,rate:.0204},{min:275925,max:Infinity,rate:.0264}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'OH':{'name':'Ohio','type':'bracket','brackets':{'single':[{min:0,max:26050,rate:0},{min:26050,max:46100,rate:.02765},{min:46100,max:92150,rate:.03226},{min:92150,max:115300,rate:.03688},{min:115300,max:Infinity,rate:.03990}],'mfj':[{min:0,max:26050,rate:0},{min:26050,max:46100,rate:.02765},{min:46100,max:92150,rate:.03226},{min:92150,max:115300,rate:.03688},{min:115300,max:Infinity,rate:.03990}]},'stdDed':{'single':0,'mfj':0},'sdi':null},
+  'OK':{'name':'Oklahoma','type':'bracket','brackets':{'single':[{min:0,max:1000,rate:.0025},{min:1000,max:2500,rate:.0075},{min:2500,max:3750,rate:.0175},{min:3750,max:4900,rate:.0275},{min:4900,max:7200,rate:.0375},{min:7200,max:Infinity,rate:.0475}],'mfj':[{min:0,max:2000,rate:.0025},{min:2000,max:5000,rate:.0075},{min:5000,max:7500,rate:.0175},{min:7500,max:9800,rate:.0275},{min:9800,max:12200,rate:.0375},{min:12200,max:Infinity,rate:.0475}]},'stdDed':{'single':6350,'mfj':12700},'sdi':null},
+  'OR':{'name':'Oregon','type':'bracket','brackets':{'single':[{min:0,max:18400,rate:.0475},{min:18400,max:250000,rate:.0875},{min:250000,max:Infinity,rate:.099}],'mfj':[{min:0,max:36800,rate:.0475},{min:36800,max:500000,rate:.0875},{min:500000,max:Infinity,rate:.099}]},'stdDed':{'single':2745,'mfj':5495},'sdi':{'rate':0.01,'wageBase':null,'label':'OR Paid Leave (1%)'}},
+  'PA':{'name':'Pennsylvania','type':'flat','rate':0.0307,'stdDed':{'single':0,'mfj':0},'sdi':null},
+  'RI':{'name':'Rhode Island','type':'bracket','brackets':{'single':[{min:0,max:77450,rate:.0375},{min:77450,max:176050,rate:.0475},{min:176050,max:Infinity,rate:.0599}],'mfj':[{min:0,max:154900,rate:.0375},{min:154900,max:352100,rate:.0475},{min:352100,max:Infinity,rate:.0599}]},'stdDed':{'single':10550,'mfj':21100},'sdi':{'rate':0.013,'wageBase':87000,'label':'RI TDI (1.3% up to $87,000)'}},
+  'SC':{'name':'South Carolina','type':'flat','rate':0.064,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'SD':{'name':'South Dakota','type':'none','sdi':null},
+  'TN':{'name':'Tennessee','type':'none','sdi':null},
+  'TX':{'name':'Texas','type':'none','sdi':null},
+  'UT':{'name':'Utah','type':'flat','rate':0.0465,'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'VT':{'name':'Vermont','type':'bracket','brackets':{'single':[{min:0,max:45400,rate:.0335},{min:45400,max:110050,rate:.066},{min:110050,max:229550,rate:.076},{min:229550,max:Infinity,rate:.0875}],'mfj':[{min:0,max:75850,rate:.0335},{min:75850,max:183750,rate:.066},{min:183750,max:236350,rate:.076},{min:236350,max:Infinity,rate:.0875}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+  'VA':{'name':'Virginia','type':'bracket','brackets':{'single':[{min:0,max:3000,rate:.02},{min:3000,max:5000,rate:.03},{min:5000,max:17000,rate:.05},{min:17000,max:Infinity,rate:.0575}],'mfj':[{min:0,max:3000,rate:.02},{min:3000,max:5000,rate:.03},{min:5000,max:17000,rate:.05},{min:17000,max:Infinity,rate:.0575}]},'stdDed':{'single':8000,'mfj':16000},'sdi':null},
+  'WA':{'name':'Washington','type':'none','sdi':{'rate':0.008,'wageBase':null,'label':'WA Paid Family Leave (~0.8%)'}},
+  'WV':{'name':'West Virginia','type':'bracket','brackets':{'single':[{min:0,max:10000,rate:.03},{min:10000,max:25000,rate:.04},{min:25000,max:40000,rate:.045},{min:40000,max:60000,rate:.06},{min:60000,max:Infinity,rate:.065}],'mfj':[{min:0,max:10000,rate:.03},{min:10000,max:25000,rate:.04},{min:25000,max:40000,rate:.045},{min:40000,max:60000,rate:.06},{min:60000,max:Infinity,rate:.065}]},'stdDed':{'single':0,'mfj':0},'sdi':null},
+  'WI':{'name':'Wisconsin','type':'bracket','brackets':{'single':[{min:0,max:14320,rate:.035},{min:14320,max:28640,rate:.044},{min:28640,max:315310,rate:.053},{min:315310,max:Infinity,rate:.075}],'mfj':[{min:0,max:19090,rate:.035},{min:19090,max:38190,rate:.044},{min:38190,max:420420,rate:.053},{min:420420,max:Infinity,rate:.075}]},'stdDed':{'single':12760,'mfj':23620},'sdi':null},
+  'WY':{'name':'Wyoming','type':'none','sdi':null},
+  'DC':{'name':'District of Columbia','type':'bracket','brackets':{'single':[{min:0,max:10000,rate:.04},{min:10000,max:40000,rate:.06},{min:40000,max:60000,rate:.065},{min:60000,max:250000,rate:.085},{min:250000,max:500000,rate:.0925},{min:500000,max:1000000,rate:.0975},{min:1000000,max:Infinity,rate:.1075}],'mfj':[{min:0,max:10000,rate:.04},{min:10000,max:40000,rate:.06},{min:40000,max:60000,rate:.065},{min:60000,max:250000,rate:.085},{min:250000,max:500000,rate:.0925},{min:500000,max:1000000,rate:.0975},{min:1000000,max:Infinity,rate:.1075}]},'stdDed':{'single':14600,'mfj':29200},'sdi':null},
+};
+
+// Quarterly estimated tax due dates 2025/2026
+const QUARTERLY_DATES = [
+  {period:'Q1 2025', due:'April 15, 2025',   months:'Jan 1 – Mar 31'},
+  {period:'Q2 2025', due:'June 16, 2025',    months:'Apr 1 – May 31'},
+  {period:'Q3 2025', due:'September 15, 2025',months:'Jun 1 – Aug 31'},
+  {period:'Q4 2025', due:'January 15, 2026', months:'Sep 1 – Dec 31'},
+];
+
+// ── STATE ────────────────────────────────────────────────
+let activePerson  = 1;
+let person2Activated = false;
+let activeTab     = 'earnings';
+let viewMode      = 'individual';
+let schedView     = 'p1';
+let donutChart    = null;
+let bracketChart  = null;
+let nextSEId      = 1;
+
+let persons = {
+  1: defaultPerson(),
+  2: defaultPerson(),
+};
+
+function defaultPerson() {
+  return {
+    earnings: [{id:1, type:'salary', method:'year', amount:80000}],
+    overtime: [],
+    otEnabled: false,
+    w4Version: 'new',
+    fedFiling: 'single',
+    multiJob: false,
+    depAmount: 0,
+    otherIncomeFed: 0,
+    fedDeductions: 0,
+    extraWithholding: 0,
+    nra: false,
+    allowances: 1,
+    fedExempt: false,
+    ssExempt: false,
+    medExempt: false,
+    state: 'CA',
+    stateFiling: 'single',
+    diffState: false,
+    residentState: 'CA',
+    stateExempt: false,
+    stateExtraWH: 0,
+    benefits: [
+      {id:1, name:'Medical',      amount:0, pretax:true},
+      {id:2, name:'Dental',       amount:0, pretax:true},
+      {id:3, name:'Vision',       amount:0, pretax:true},
+      {id:4, name:'Healthcare FSA',amount:0,pretax:true},
+      {id:5, name:'401(k)',       amount:0, pretax:true},
+      {id:6, name:'Roth 401(k)', amount:0, pretax:false},
+      {id:7, name:'HSA',          amount:0, pretax:true},
+    ],
+    seIncome: 0,
+    seExpenses: 0,
+    seLines: [{id:1, label:'Freelance', income:0, expenses:0}],
+    payFreq: 26,
+    payDate: new Date().toISOString().split('T')[0],
+    schedFirstDate: new Date().toISOString().split('T')[0],
+    schedSMDay1: 1,
+    schedSMDay2: 15,
+    schedYear: new Date().getFullYear(),
+  };
+}
+
+let nextEarnId=10, nextOTId=10, nextBenId=20;
+
+// ── PAY SCHEDULE ─────────────────────────────────────────
+function renderSchedConfigs() {
+  [1,2].forEach(pn=>{
+    const wrap = document.getElementById('sched-config-'+pn);
+    if (!wrap) return;
+    const p = persons[pn];
+    if (!p) return;
+    const freq = p.payFreq;
+    const isSM = freq === 24;
+    const year = p.schedYear || new Date().getFullYear();
+
+    wrap.innerHTML = `
+      <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem;max-width:500px">
+        <div class="field">
+          <label>Schedule Year</label>
+          <select class="input-bare" onchange="setSchedYear(${pn},+this.value)">${
+            [new Date().getFullYear()-1, new Date().getFullYear(), new Date().getFullYear()+1]
+            .map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')
+          }</select>
+        </div>
+        ${isSM ? `
+          <div class="field">
+            <label>Pay Day 1 (of month)</label>
+            <div class="input-wrap"><input type="number" value="${p.schedSMDay1||1}" min="1" max="28" onchange="setSchedSMDay(${pn},1,+this.value)"></div>
+          </div>
+          <div class="field">
+            <label>Pay Day 2 (of month)</label>
+            <div class="input-wrap"><input type="number" value="${p.schedSMDay2||15}" min="1" max="28" onchange="setSchedSMDay(${pn},2,+this.value)"></div>
+          </div>
+        ` : `
+          <div class="field">
+            <label>First Pay Date of Year</label>
+            <input type="date" class="input-bare" value="${p.schedFirstDate||p.payDate}" onchange="setSchedFirstDate(${pn},this.value)">
+          </div>
+        `}
+      </div>
+      <div style="font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)">
+        Frequency: <strong style="color:var(--mut2)">${{52:'Weekly',26:'Bi-weekly',24:'Semi-monthly',12:'Monthly'}[freq]||'—'}</strong>
+        &nbsp;·&nbsp; ${generatePayDates(pn,year).length} pay dates in ${year}
+      </div>`;
+  });
+  // Show p2 config only if activated
+  const p2wrap = document.getElementById('sched-p2-wrap');
+  if (p2wrap) p2wrap.style.display = person2Activated ? 'block' : 'none';
+  // Update p2 view button
+  const svb2 = document.getElementById('svb-2');
+  const svbc = document.getElementById('svb-combined');
+  if (svb2) svb2.style.display = person2Activated ? '' : 'none';
+  if (svbc) svbc.style.display = person2Activated ? '' : 'none';
+}
+
+function setSchedYear(pn, yr) { persons[pn].schedYear = yr; renderSchedConfigs(); renderSchedTable(); }
+function setSchedFirstDate(pn, d) { persons[pn].schedFirstDate = d; renderSchedConfigs(); renderSchedTable(); }
+function setSchedSMDay(pn, slot, day) {
+  if (slot===1) persons[pn].schedSMDay1 = day;
+  else persons[pn].schedSMDay2 = day;
+  renderSchedConfigs(); renderSchedTable();
+}
+
+function generatePayDates(pn, year) {
+  const p = persons[pn];
+  const freq = p.payFreq;
+  const dates = [];
+
+  if (freq === 24) {
+    // Semi-monthly: specific days of each month
+    const d1 = p.schedSMDay1 || 1;
+    const d2 = p.schedSMDay2 || 15;
+    for (let mo = 0; mo < 12; mo++) {
+      const daysInMonth = new Date(year, mo+1, 0).getDate();
+      [d1, d2].forEach(day => {
+        const actual = Math.min(day, daysInMonth);
+        dates.push(new Date(year, mo, actual));
+      });
+    }
+  } else if (freq === 12) {
+    // Monthly: same day each month as first date
+    const firstDate = new Date((p.schedFirstDate||p.payDate)+'T12:00:00');
+    const dayOfMonth = firstDate.getDate();
+    for (let mo = 0; mo < 12; mo++) {
+      const daysInMonth = new Date(year, mo+1, 0).getDate();
+      dates.push(new Date(year, mo, Math.min(dayOfMonth, daysInMonth)));
+    }
+  } else {
+    // Weekly (7) or Bi-weekly (14): repeat from first date
+    const interval = freq === 52 ? 7 : 14;
+    let cur = new Date((p.schedFirstDate||p.payDate)+'T12:00:00');
+    // Wind back to find first date in year if needed
+    while (cur.getFullYear() > year) cur = new Date(cur.getTime() - interval*86400000);
+    while (cur.getFullYear() < year || (cur.getFullYear()===year && cur < new Date(year,0,1))) {
+      cur = new Date(cur.getTime() + interval*86400000);
+    }
+    while (cur.getFullYear() === year) {
+      dates.push(new Date(cur));
+      cur = new Date(cur.getTime() + interval*86400000);
+    }
+  }
+  return dates.filter(d => d.getFullYear() === year).sort((a,b)=>a-b);
+}
+
+function setSchedView(v) {
+  schedView = v;
+  ['p1','p2','combined'].forEach(k => {
+    const btn = document.getElementById('svb-'+k);
+    if (btn) btn.classList.toggle('active', k===v);
+  });
+  renderSchedTable();
+}
+
+function renderSchedTable() {
+  const year = persons[activePerson].schedYear || new Date().getFullYear();
+  const thead = document.getElementById('sched-thead');
+  const tbody  = document.getElementById('sched-tbody');
+  const tfoot  = document.getElementById('sched-tfoot');
+  if (!thead || !tbody || !tfoot) return;
+
+  const isCombined = schedView === 'combined' && person2Activated;
+  const showP2     = schedView === 'p2';
+  const pn         = showP2 ? 2 : 1;
+
+  // Get data for person(s)
+  function getPersonData(pNum) {
+    const p     = persons[pNum];
+    const gross = calcGrossAnnual(p);
+    const tx    = calcPersonTax(p, gross);
+    const dates = generatePayDates(pNum, year);
+    const freq  = p.payFreq;
+    return { p, gross, tx, dates, freq, perCheck: gross/freq, netPerCheck: tx.netAnnual/freq,
+      fedPerCheck: tx.fedTax/freq, ssPerCheck: tx.ssTax/freq, medPerCheck: tx.medicareTax/freq,
+      statePerCheck: (tx.stateTax+tx.sdiTax)/freq, benPerCheck: (tx.pretaxBenAnnual+tx.postTaxBenAnnual)/freq };
+  }
+
+  const d1 = getPersonData(1);
+  const d2 = person2Activated ? getPersonData(2) : null;
+
+  // Build unified date list
+  let allDates = [];
+  if (isCombined) {
+    const dateSet = new Set();
+    [...d1.dates, ...(d2?d2.dates:[])].forEach(d=>{
+      const key = d.toISOString().split('T')[0];
+      if (!dateSet.has(key)) { dateSet.add(key); allDates.push(d); }
+    });
+    allDates.sort((a,b)=>a-b);
+  } else {
+    allDates = showP2 ? d2.dates : d1.dates;
+  }
+
+  // Header
+  const cols = isCombined
+    ? ['Pay Date','P1 Gross','P2 Gross','Fed Tax','FICA','State','Benefits','P1 Net','P2 Net','Combined Net']
+    : ['Pay Date','Gross','Federal Tax','Social Security','Medicare','State/SDI','Benefits','Net Take-Home'];
+  thead.innerHTML = cols.map(h=>`<th>${h}</th>`).join('');
+
+  // Totals
+  const tots = { gross1:0,gross2:0,fed:0,ss:0,med:0,state:0,ben:0,net1:0,net2:0 };
+
+  tbody.innerHTML = '';
+  allDates.forEach(date => {
+    const dateStr = date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const isP1Pay = d1.dates.some(d=>d.toDateString()===date.toDateString());
+    const isP2Pay = d2 && d2.dates.some(d=>d.toDateString()===date.toDateString());
+
+    const tr = document.createElement('tr');
+    let cells = `<td style="color:var(--mut2)">${dateStr}</td>`;
+
+    if (isCombined) {
+      const g1 = isP1Pay ? d1.perCheck : 0;
+      const g2 = isP2Pay ? d2.perCheck : 0;
+      const fed= (isP1Pay?d1.fedPerCheck:0)+(isP2Pay?d2.fedPerCheck:0);
+      const ss = (isP1Pay?d1.ssPerCheck:0)+(isP2Pay?d2.ssPerCheck:0);
+      const med= (isP1Pay?d1.medPerCheck:0)+(isP2Pay?d2.medPerCheck:0);
+      const st = (isP1Pay?d1.statePerCheck:0)+(isP2Pay?d2.statePerCheck:0);
+      const ben= (isP1Pay?d1.benPerCheck:0)+(isP2Pay?d2.benPerCheck:0);
+      const n1 = isP1Pay ? d1.netPerCheck : 0;
+      const n2 = isP2Pay ? d2.netPerCheck : 0;
+      tots.gross1+=g1;tots.gross2+=g2;tots.fed+=fed;tots.ss+=ss;
+      tots.med+=med;tots.state+=st;tots.ben+=ben;tots.net1+=n1;tots.net2+=n2;
+      cells += `
+        <td style="color:var(--grn)">${g1>0?fL2(g1):'—'}</td>
+        <td style="color:var(--blu)">${g2>0?fL2(g2):'—'}</td>
+        <td style="color:var(--red)">${(fed+ss+med)>0?fL2(fed+ss+med):'—'}</td>
+        <td style="color:var(--red)">${(ss+med)>0?fL2(ss+med):'—'}</td>
+        <td style="color:var(--red)">${st>0?fL2(st):'—'}</td>
+        <td style="color:var(--amb)">${ben>0?fL2(ben):'—'}</td>
+        <td style="color:var(--grn)">${n1>0?fL2(n1):'—'}</td>
+        <td style="color:var(--blu)">${n2>0?fL2(n2):'—'}</td>
+        <td style="font-weight:600;color:var(--grn)">${fL2(n1+n2)}</td>`;
+    } else {
+      const d = showP2 ? d2 : d1;
+      tots.gross1+=d.perCheck;tots.fed+=d.fedPerCheck;tots.ss+=d.ssPerCheck;
+      tots.med+=d.medPerCheck;tots.state+=d.statePerCheck;tots.ben+=d.benPerCheck;tots.net1+=d.netPerCheck;
+      cells += `
+        <td style="color:var(--grn)">${fL2(d.perCheck)}</td>
+        <td style="color:var(--red)">${fL2(d.fedPerCheck)}</td>
+        <td style="color:var(--red)">${fL2(d.ssPerCheck)}</td>
+        <td style="color:var(--red)">${fL2(d.medPerCheck)}</td>
+        <td style="color:var(--red)">${fL2(d.statePerCheck)}</td>
+        <td style="color:var(--amb)">${fL2(d.benPerCheck)}</td>
+        <td style="font-weight:700;color:var(--grn)">${fL2(d.netPerCheck)}</td>`;
+    }
+    tr.innerHTML = cells;
+    // Highlight 3-paycheck months
+    if (!isCombined) {
+      const mo = date.getMonth();
+      const d  = showP2 ? d2 : d1;
+      const inMo = d.dates.filter(dd=>dd.getMonth()===mo).length;
+      if (inMo >= 3) tr.style.background = 'rgba(74,222,128,0.05)';
+    }
+    tbody.appendChild(tr);
+  });
+
+  // Footer totals
+  if (isCombined) {
+    tfoot.innerHTML = `<td style="font-weight:700;color:var(--txt)">TOTALS</td>
+      <td style="font-weight:700;color:var(--grn)">${fL2(tots.gross1)}</td>
+      <td style="font-weight:700;color:var(--blu)">${fL2(tots.gross2)}</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.fed)}</td>
+      <td style="font-weight:700;color:var(--red)">—</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.state)}</td>
+      <td style="font-weight:700;color:var(--amb)">${fL2(tots.ben)}</td>
+      <td style="font-weight:700;color:var(--grn)">${fL2(tots.net1)}</td>
+      <td style="font-weight:700;color:var(--blu)">${fL2(tots.net2)}</td>
+      <td style="font-weight:700;font-size:1rem;color:var(--grn)">${fL2(tots.net1+tots.net2)}</td>`;
+  } else {
+    tfoot.innerHTML = `<td style="font-weight:700;color:var(--txt)">TOTALS</td>
+      <td style="font-weight:700;color:var(--grn)">${fL2(tots.gross1)}</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.fed)}</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.ss)}</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.med)}</td>
+      <td style="font-weight:700;color:var(--red)">${fL2(tots.state)}</td>
+      <td style="font-weight:700;color:var(--amb)">${fL2(tots.ben)}</td>
+      <td style="font-weight:700;font-size:1rem;color:var(--grn)">${fL2(tots.net1)}</td>`;
+  }
+}
+
+// ── IMPORT TO BUDGET ──────────────────────────────────────
+function importToBudget() {
+  const p1     = persons[1];
+  const p2     = person2Activated ? persons[2] : null;
+  const g1     = calcGrossAnnual(p1);
+  const tx1    = calcPersonTax(p1, g1);
+  const g2     = p2 ? calcGrossAnnual(p2) : 0;
+  const tx2    = p2 ? calcPersonTax(p2, g2) : {netAnnual:0};
+  const freq   = p1.payFreq;
+  const freqMap= {52:'weekly',26:'biweekly',24:'semimonthly',12:'monthly'};
+
+  storeSave('fin_income_export', {
+    gross: String(Math.round(g1 + g2)),
+    net:   String(Math.round((tx1.netAnnual + tx2.netAnnual) / freq)),
+    freq:  freqMap[freq] || 'semimonthly',
+    exportedAt: new Date().toISOString()
+  });
+
+  const el = document.getElementById('budget-import-status');
+  el.textContent = '✓ Sent to Budget — gross $'+(g1+g2).toLocaleString()+', net $'+Math.round((tx1.netAnnual+tx2.netAnnual)/freq).toLocaleString()+'/period';
+  el.style.display = 'inline';
+  setTimeout(()=>{ el.style.display='none'; }, 5000);
+}
+
+// ── XLS EXPORT ────────────────────────────────────────────
+function exportSchedXLS() {
+  if (typeof XLSX === 'undefined') { alert('SheetJS not loaded.'); return; }
+  const wb   = XLSX.utils.book_new();
+  const year = persons[activePerson].schedYear || new Date().getFullYear();
+
+  function makeSheet(pn, label) {
+    const d = (() => {
+      const p = persons[pn], gross = calcGrossAnnual(p), tx = calcPersonTax(p, gross);
+      const freq = p.payFreq;
+      return { dates: generatePayDates(pn, year), perCheck: gross/freq,
+        netPerCheck: tx.netAnnual/freq, fedPerCheck: tx.fedTax/freq,
+        ssPerCheck: tx.ssTax/freq, medPerCheck: tx.medicareTax/freq,
+        statePerCheck: (tx.stateTax+tx.sdiTax)/freq, benPerCheck: (tx.pretaxBenAnnual+tx.postTaxBenAnnual)/freq };
+    })();
+    const rows = [['Pay Date','Gross','Federal Tax','Soc Security','Medicare','State/SDI','Benefits','Net Take-Home']];
+    let tots = [0,0,0,0,0,0,0];
+    d.dates.forEach(date => {
+      const row = [date.toLocaleDateString('en-US'),d.perCheck,d.fedPerCheck,d.ssPerCheck,
+        d.medPerCheck,d.statePerCheck,d.benPerCheck,d.netPerCheck];
+      rows.push(row);
+      [1,2,3,4,5,6,7].forEach(i=>tots[i-1]+=row[i]);
+    });
+    rows.push(['TOTALS',...tots]);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:14},{wch:12},{wch:14},{wch:14},{wch:12},{wch:12},{wch:12},{wch:16}];
+    XLSX.utils.book_append_sheet(wb, ws, label);
+  }
+
+  makeSheet(1, 'Person 1');
+  if (person2Activated) makeSheet(2, 'Person 2');
+  XLSX.writeFile(wb, `pay_schedule_${year}.xlsx`);
+}
+
+// ── INIT ─────────────────────────────────────────────────
+function initStateDropdowns() {
+  const sortedStates = Object.entries(STATES).sort((a,b)=>a[1].name.localeCompare(b[1].name));
+  ['state-select','resident-state'].forEach(id=>{
+    const sel=document.getElementById(id);
+    sel.innerHTML='';
+    sortedStates.forEach(([code,s])=>{
+      const opt=document.createElement('option');
+      opt.value=code; opt.textContent=s.name;
+      if(code==='CA') opt.selected=true;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+// ── PERSON / TAB ─────────────────────────────────────────
+function setPerson(n) {
+  savePerson();
+  activePerson = n;
+  document.getElementById('pb-1').classList.toggle('active', n===1);
+  document.getElementById('pb-2').classList.toggle('active', n===2);
+  // Once person 2 is activated, always show "Person 2" label
+  if (n === 2 || person2Activated) {
+    person2Activated = true;
+    document.getElementById('pb-2').textContent = 'Person 2 (Spouse)';
+  }
+  loadPerson();
+  render();
+}
+
+function setTab(t) {
+  activeTab = t;
+  document.querySelectorAll('.tab-nav-btn').forEach((btn,i)=>{
+    const tabs=['earnings','federal','state','benefits','self-employ','schedule'];
+    btn.classList.toggle('active', tabs[i]===t);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if (t==='schedule') { renderSchedConfigs(); renderSchedTable(); }
+}
+
+function savePerson() {
+  const p = persons[activePerson];
+  p.payFreq     = +document.getElementById('pay-freq').value;
+  p.payDate     = document.getElementById('pay-date').value;
+  p.w4Version   = document.querySelector('input[name=w4ver]:checked')?.value||'new';
+  p.fedFiling   = document.getElementById('fed-filing').value;
+  p.multiJob    = document.querySelector('input[name=multi-job]:checked')?.value==='yes';
+  p.depAmount   = +document.getElementById('dep-amount').value||0;
+  p.otherIncomeFed=+document.getElementById('other-income-fed').value||0;
+  p.fedDeductions=+document.getElementById('fed-deductions').value||0;
+  p.extraWithholding=+document.getElementById('extra-withholding').value||0;
+  p.nra         = document.querySelector('input[name=nra]:checked')?.value==='yes';
+  p.allowances  = +document.getElementById('allowances').value||1;
+  p.fedExempt   = document.querySelector('input[name=fed-exempt]:checked')?.value==='yes';
+  p.ssExempt    = document.querySelector('input[name=ss-exempt]:checked')?.value==='yes';
+  p.medExempt   = document.querySelector('input[name=med-exempt]:checked')?.value==='yes';
+  p.state       = document.getElementById('state-select').value;
+  p.stateFiling = document.getElementById('state-filing').value;
+  p.diffState   = document.querySelector('input[name=diff-state]:checked')?.value==='yes';
+  p.residentState=document.getElementById('resident-state').value;
+  p.stateExempt = document.querySelector('input[name=state-exempt]:checked')?.value==='yes';
+  p.stateExtraWH=+document.getElementById('state-extra-wh').value||0;
+  p.otEnabled   = document.getElementById('ot-toggle').checked;
+  // seLines are saved directly via setSELine, no need to read DOM
+}
+
+function loadPerson() {
+  const p = persons[activePerson];
+  document.getElementById('pay-freq').value  = p.payFreq;
+  document.getElementById('pay-date').value  = p.payDate;
+  document.querySelector(`input[name=w4ver][value="${p.w4Version}"]`).checked=true;
+  document.getElementById('fed-filing').value= p.fedFiling;
+  document.querySelector(`input[name=multi-job][value="${p.multiJob?'yes':'no'}"]`).checked=true;
+  document.getElementById('dep-amount').value= p.depAmount;
+  document.getElementById('other-income-fed').value=p.otherIncomeFed;
+  document.getElementById('fed-deductions').value=p.fedDeductions;
+  document.getElementById('extra-withholding').value=p.extraWithholding;
+  document.querySelector(`input[name=nra][value="${p.nra?'yes':'no'}"]`).checked=true;
+  document.getElementById('allowances').value=p.allowances;
+  document.querySelector(`input[name=fed-exempt][value="${p.fedExempt?'yes':'no'}"]`).checked=true;
+  document.querySelector(`input[name=ss-exempt][value="${p.ssExempt?'yes':'no'}"]`).checked=true;
+  document.querySelector(`input[name=med-exempt][value="${p.medExempt?'yes':'no'}"]`).checked=true;
+  document.getElementById('state-select').value=p.state;
+  document.getElementById('state-filing').value=p.stateFiling;
+  document.querySelector(`input[name=diff-state][value="${p.diffState?'yes':'no'}"]`).checked=true;
+  document.getElementById('resident-state').value=p.residentState;
+  document.getElementById('resident-state-field').style.display=p.diffState?'block':'none';
+  document.querySelector(`input[name=state-exempt][value="${p.stateExempt?'yes':'no'}"]`).checked=true;
+  document.getElementById('state-extra-wh').value=p.stateExtraWH;
+  document.getElementById('se-income').value=p.seIncome;
+  document.getElementById('se-expenses').value=p.seExpenses;
+  document.getElementById('ot-toggle').checked=p.otEnabled;
+  document.getElementById('overtime-fields').style.display=p.otEnabled?'block':'none';
+  toggleW4();
+  renderEarnings();
+  renderOvertime();
+  renderBenefits();
+  renderSEList();
+  onStateChange();
+}
+
+// ── EARNINGS ─────────────────────────────────────────────
+function addEarning() {
+  persons[activePerson].earnings.push({id:nextEarnId++,type:'salary',method:'year',amount:0});
+  renderEarnings(); render();
+}
+function removeEarning(id) {
+  const p=persons[activePerson];
+  if(p.earnings.length<=1) return;
+  p.earnings=p.earnings.filter(e=>e.id!==id);
+  renderEarnings(); render();
+}
+function setEarn(id,k,v){const e=persons[activePerson].earnings.find(e=>e.id===id);if(e){e[k]=v;render();}}
+
+function renderEarnings() {
+  const list=document.getElementById('earnings-list');
+  list.innerHTML='';
+  persons[activePerson].earnings.forEach(e=>{
+    const div=document.createElement('div');
+    div.className='earn-row';
+    div.innerHTML=`
+      <select class="input-bare" onchange="setEarn(${e.id},'type',this.value)" style="font-size:0.75rem">
+        <option value="salary" ${e.type==='salary'?'selected':''}>Salary</option>
+        <option value="hourly" ${e.type==='hourly'?'selected':''}>Hourly</option>
+        <option value="commission" ${e.type==='commission'?'selected':''}>Commission</option>
+        <option value="bonus" ${e.type==='bonus'?'selected':''}>Bonus</option>
+        <option value="tips" ${e.type==='tips'?'selected':''}>Tips</option>
+      </select>
+      <select class="input-bare" onchange="setEarn(${e.id},'method',this.value)" style="font-size:0.75rem">
+        <option value="year"   ${e.method==='year'?'selected':''}>Per Year</option>
+        <option value="month"  ${e.method==='month'?'selected':''}>Per Month</option>
+        <option value="period" ${e.method==='period'?'selected':''}>Per Pay Period</option>
+        <option value="hour"   ${e.method==='hour'?'selected':''}>Per Hour</option>
+      </select>
+      <div class="input-wrap"><input type="number" value="${e.amount}" min="0" step="0.01" oninput="setEarn(${e.id},'amount',+this.value||0)" style="font-size:0.78rem"><span class="unit">$</span></div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeEarning(${e.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── OVERTIME ─────────────────────────────────────────────
+function toggleOvertime() {
+  const on=document.getElementById('ot-toggle').checked;
+  persons[activePerson].otEnabled=on;
+  document.getElementById('overtime-fields').style.display=on?'block':'none';
+  render();
+}
+function addOvertime() {
+  persons[activePerson].overtime.push({id:nextOTId++,hours:0,amount:0});
+  renderOvertime(); render();
+}
+function removeOT(id){persons[activePerson].overtime=persons[activePerson].overtime.filter(o=>o.id!==id);renderOvertime();render();}
+function setOT(id,k,v){const o=persons[activePerson].overtime.find(o=>o.id===id);if(o){o[k]=v;render();}}
+
+function renderOvertime() {
+  const list=document.getElementById('overtime-list');
+  list.innerHTML='';
+  persons[activePerson].overtime.forEach(o=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:grid;grid-template-columns:90px 1fr auto;gap:0.5rem;align-items:center;margin-bottom:0.5rem';
+    div.innerHTML=`
+      <div class="input-wrap"><input type="number" value="${o.hours}" min="0" step="0.5" placeholder="Hours" oninput="setOT(${o.id},'hours',+this.value||0)" style="font-size:0.78rem"><span class="unit">hrs</span></div>
+      <div class="input-wrap"><input type="number" value="${o.amount}" min="0" step="0.01" placeholder="$ override (blank=auto)" oninput="setOT(${o.id},'amount',+this.value||0)" style="font-size:0.78rem"><span class="unit">$</span></div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeOT(${o.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── BENEFITS ─────────────────────────────────────────────
+function addBenefit(){
+  persons[activePerson].benefits.push({id:nextBenId++,name:'New Benefit',amount:0,pretax:true});
+  renderBenefits();render();
+}
+function removeBenefit(id){persons[activePerson].benefits=persons[activePerson].benefits.filter(b=>b.id!==id);renderBenefits();render();}
+function setBen(id,k,v){
+  const b=persons[activePerson].benefits.find(b=>b.id===id);
+  if(!b) return;
+  b[k]=v;
+  // Only re-render DOM for name changes; amount changes just trigger calc
+  if(k==='name') renderBenefits();
+  render();
+}
+function toggleBenTax(id){const b=persons[activePerson].benefits.find(b=>b.id===id);if(b){b.pretax=!b.pretax;renderBenefits();render();}}
+
+function renderBenefits(){
+  const list=document.getElementById('benefits-list');
+  list.innerHTML='';
+  persons[activePerson].benefits.forEach(b=>{
+    const div=document.createElement('div');
+    div.className='benefit-row';
+    div.innerHTML=`
+      <input class="input-bare" type="text" value="${esc(b.name)}" oninput="setBen(${b.id},'name',this.value)" style="font-size:0.78rem">
+      <div class="input-wrap"><input type="number" value="${b.amount}" min="0" step="0.01" oninput="setBen(${b.id},'amount',+this.value||0)" style="font-size:0.78rem"><span class="unit">$</span></div>
+      <div style="display:flex;justify-content:center">
+        <span class="tax-badge ${b.pretax?'pretax':'posttax'}" onclick="toggleBenTax(${b.id})">${b.pretax?'Pre-tax':'Post-tax'}</span>
+      </div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── TOGGLES ───────────────────────────────────────────────
+function toggleW4() {
+  const v=document.querySelector('input[name=w4ver]:checked')?.value||'new';
+  document.getElementById('w4-new').style.display=v==='new'?'block':'none';
+  document.getElementById('w4-old').style.display=v==='old'?'block':'none';
+  render();
+}
+function toggleDiffState(){
+  const yes=document.querySelector('input[name=diff-state]:checked')?.value==='yes';
+  document.getElementById('resident-state-field').style.display=yes?'block':'none';
+  render();
+}
+function onStateChange(){
+  const code=document.getElementById('state-select').value;
+  const s=STATES[code];
+  // Show SDI field
+  const sdiField=document.getElementById('sdi-field');
+  if(s&&s.sdi){
+    sdiField.style.display='block';
+    document.getElementById('sdi-note').textContent=s.sdi.label+(s.sdi.wageBase?' (wage base: $'+s.sdi.wageBase.toLocaleString()+')':'');
+  } else {
+    sdiField.style.display='none';
+  }
+  // State-specific fields (allowances for older states)
+  const specFields=document.getElementById('state-specific-fields');
+  if(code==='CA'||code==='NY'||code==='MA'){
+    specFields.innerHTML=`<div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+      <div class="field"><label>Regular Allowances</label><div class="input-wrap"><input type="number" id="state-allowances" value="1" min="0" oninput="render()"></div></div>
+      <div class="field"><label>Additional Allowances</label><div class="input-wrap"><input type="number" id="state-extra-allow" value="0" min="0" oninput="render()"></div></div>
+    </div>`;
+  } else {
+    specFields.innerHTML='';
+  }
+  render();
+}
+
+// ── SE LINES ─────────────────────────────────────────────
+function addSELine() {
+  persons[activePerson].seLines.push({id:nextSEId++, label:'', income:0, expenses:0});
+  renderSEList(); render();
+}
+function removeSELine(id) {
+  const p = persons[activePerson];
+  if (p.seLines.length <= 1) return;
+  p.seLines = p.seLines.filter(s=>s.id!==id);
+  renderSEList(); render();
+}
+function setSELine(id,k,v) {
+  const s = persons[activePerson].seLines.find(s=>s.id===id);
+  if (!s) return;
+  s[k] = v;
+  if (k==='label') renderSEList();
+  render();
+}
+function renderSEList() {
+  const list = document.getElementById('se-list');
+  if (!list) return;
+  list.innerHTML = '';
+  persons[activePerson].seLines.forEach(s=>{
+    const div = document.createElement('div');
+    div.style.cssText = 'display:grid;grid-template-columns:1fr 110px 110px auto;gap:0.5rem;align-items:center;margin-bottom:0.45rem';
+    div.innerHTML = `
+      <input class="input-bare" type="text" value="${esc(s.label)}" placeholder="e.g. Consulting" oninput="setSELine(${s.id},'label',this.value)" style="font-size:0.78rem">
+      <div class="input-wrap"><input type="number" value="${s.income}" min="0" oninput="setSELine(${s.id},'income',+this.value||0)" style="font-size:0.78rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${s.expenses}" min="0" oninput="setSELine(${s.id},'expenses',+this.value||0)" style="font-size:0.78rem"><span class="unit">$</span></div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeSELine(${s.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── VIEW MODE ─────────────────────────────────────────────
+function setView(v) {
+  viewMode = v;
+  document.getElementById('vb-individual').classList.toggle('active', v==='individual');
+  document.getElementById('vb-combined').classList.toggle('active',   v==='combined');
+  render();
+}
+
+// ── MATH ENGINE ───────────────────────────────────────────
+function calcGrossAnnual(p) {
+  const freq = p.payFreq;
+  let gross = p.earnings.reduce((s,e)=>{
+    switch(e.method){
+      case 'year':   return s+e.amount;
+      case 'month':  return s+e.amount*12;
+      case 'period': return s+e.amount*freq;
+      case 'hour':   return s+e.amount*2080; // 52wk*40hr
+      default:       return s+e.amount;
+    }
+  },0);
+  // Overtime
+  if(p.otEnabled){
+    const hourlyRate=p.earnings.find(e=>e.type==='hourly');
+    const baseHourly=hourlyRate?hourlyRate.amount:gross/2080;
+    p.overtime.forEach(o=>{
+      if(o.amount>0) gross+=o.amount*freq;
+      else gross+=o.hours*baseHourly*1.5*freq;
+    });
+  }
+  return gross;
+}
+
+function calcBracketed(taxable, brackets) {
+  if(!brackets||taxable<=0) return 0;
+  return brackets.reduce((tax,b)=>{
+    if(taxable<=b.min) return tax;
+    return tax+(Math.min(taxable,b.max)-b.min)*b.rate;
+  },0);
+}
+
+function getMarginalRate(taxable, brackets) {
+  if(!brackets||taxable<=0) return 0;
+  for(let i=brackets.length-1;i>=0;i--){
+    if(taxable>brackets[i].min) return brackets[i].rate;
+  }
+  return 0;
+}
+
+function calcPersonTax(p, grossAnnual) {
+  const freq = p.payFreq;
+  const fs   = p.fedFiling;
+
+  // Pre-tax benefits
+  const pretaxBenAnnual = p.benefits.filter(b=>b.pretax).reduce((s,b)=>s+b.amount*freq,0);
+
+  // Federal taxable income
+  const stdDed    = FEDERAL.stdDed[fs]||15000;
+  const addlDeds  = p.fedDeductions||0;
+  const totalDeds = stdDed+addlDeds+pretaxBenAnnual;
+  const fedTaxable= Math.max(0, grossAnnual + (p.otherIncomeFed||0) - totalDeds - (p.depAmount||0));
+
+  // Federal income tax
+  let fedTax = 0;
+  if(!p.fedExempt){
+    if(p.w4Version==='old'){
+      const allowDed=(p.allowances||0)*FEDERAL.allowanceAmt2024;
+      const adjGross=Math.max(0,grossAnnual-allowDed-pretaxBenAnnual);
+      fedTax=calcBracketed(adjGross,FEDERAL.brackets[fs==='mfj'?'mfj':'single']);
+    } else {
+      fedTax=calcBracketed(fedTaxable,FEDERAL.brackets[fs]);
+    }
+  }
+
+  // FICA
+  const ssTax   =p.ssExempt?0:Math.min(grossAnnual,FEDERAL.ssWageBase)*FEDERAL.ssRate;
+  const medBase  =grossAnnual*FEDERAL.medicareRate;
+  const addlMed  =p.medExempt?0:Math.max(0,grossAnnual-(FEDERAL.addlMedicareThreshold[fs]||200000))*FEDERAL.addlMedicareRate;
+  const medicareTax=p.medExempt?0:medBase+addlMed;
+
+  // State tax
+  const stateCode=p.state;
+  const sd=STATES[stateCode];
+  let stateTax=0, sdiTax=0;
+  if(!p.stateExempt&&sd&&sd.type!=='none'){
+    const stateStdDed=(sd.stdDed&&sd.stdDed[p.stateFiling])||0;
+    const stateTaxable=Math.max(0,grossAnnual-stateStdDed-pretaxBenAnnual);
+    if(sd.type==='flat') stateTax=stateTaxable*sd.rate;
+    else if(sd.type==='bracket'){
+      const bks=sd.brackets[p.stateFiling]||sd.brackets.single;
+      stateTax=calcBracketed(stateTaxable,bks);
+    }
+  }
+  // SDI
+  if(sd&&sd.sdi){
+    const sdiBase=sd.sdi.wageBase?Math.min(grossAnnual,sd.sdi.wageBase):grossAnnual;
+    sdiTax=sdiBase*sd.sdi.rate;
+  }
+  // State extra withholding
+  const stateExtraAnnual=(p.stateExtraWH||0)*freq;
+
+  // Additional W-4 withholding
+  const extraFedAnnual=(p.extraWithholding||0)*freq;
+
+  const totalTax=fedTax+ssTax+medicareTax+stateTax+sdiTax+stateExtraAnnual+extraFedAnnual;
+  const postTaxBenAnnual=p.benefits.filter(b=>!b.pretax).reduce((s,b)=>s+b.amount*freq,0);
+  const netAnnual=grossAnnual-totalTax-postTaxBenAnnual;
+  const effRate=grossAnnual>0?totalTax/grossAnnual:0;
+  const margRate=getMarginalRate(fedTaxable,FEDERAL.brackets[fs]);
+
+  return {grossAnnual,fedTaxable,fedTax,ssTax,medicareTax,stateTax,sdiTax,
+    stateExtraAnnual,extraFedAnnual,totalTax,netAnnual,effRate,margRate,
+    pretaxBenAnnual,postTaxBenAnnual,stdDed,freq};
+}
+
+// ── RAISE SLIDER ──────────────────────────────────────────
+function onRaiseSlider(){
+  const pct=parseFloat(document.getElementById('raise-slider').value)||0;
+  document.getElementById('raise-pct-lbl').textContent='+'+pct.toFixed(1)+'%';
+  const preview=document.getElementById('raise-preview');
+  if(pct===0){preview.style.display='none';return;}
+  preview.style.display='block';
+  savePerson();
+  const p=persons[activePerson];
+  const currentGross=calcGrossAnnual(p);
+  const newGross=currentGross*(1+pct/100);
+  const currentTax=calcPersonTax(p,currentGross);
+  const newTax=calcPersonTax(p,newGross);
+  const freq=p.payFreq;
+  preview.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-family:'DM Mono',monospace;font-size:0.73rem">
+      <div style="padding:0.5rem;background:var(--surf3);border-radius:6px">
+        <div style="color:var(--mut);font-size:0.6rem;margin-bottom:0.2rem">NEW ANNUAL GROSS</div>
+        <div style="font-weight:600;color:var(--grn)">${fL2(newGross)}</div>
+        <div style="color:var(--mut);font-size:0.65rem">+${fL2(newGross-currentGross)}/yr</div>
+      </div>
+      <div style="padding:0.5rem;background:var(--surf3);border-radius:6px">
+        <div style="color:var(--mut);font-size:0.6rem;margin-bottom:0.2rem">NEW TAKE-HOME</div>
+        <div style="font-weight:600;color:var(--grn)">${fL2(newTax.netAnnual)}</div>
+        <div style="color:var(--mut);font-size:0.65rem">+${fL2(newTax.netAnnual-currentTax.netAnnual)}/yr</div>
+      </div>
+      <div style="padding:0.5rem;background:var(--surf3);border-radius:6px">
+        <div style="color:var(--mut);font-size:0.6rem;margin-bottom:0.2rem">NEW PER PAYCHECK</div>
+        <div style="font-weight:600">${fL2(newGross/freq)}</div>
+        <div style="color:var(--mut);font-size:0.65rem">+${fL2((newGross-currentGross)/freq)}</div>
+      </div>
+      <div style="padding:0.5rem;background:var(--surf3);border-radius:6px">
+        <div style="color:var(--mut);font-size:0.6rem;margin-bottom:0.2rem">NET PER PAYCHECK</div>
+        <div style="font-weight:600;color:var(--grn)">${fL2(newTax.netAnnual/freq)}</div>
+        <div style="color:var(--mut);font-size:0.65rem">+${fL2((newTax.netAnnual-currentTax.netAnnual)/freq)}</div>
+      </div>
+    </div>`;
+}
+
+// ── SE TAX ───────────────────────────────────────────────
+function calcSETax(seIncome, seExpenses, fedFiling, grossW2) {
+  const netSE    = Math.max(0, seIncome - seExpenses);
+  const netEarn  = netSE * 0.9235;
+  const seTax    = netEarn * 0.153;
+  const seDeduct = seTax / 2;
+  const addlIncome = netSE - seDeduct;
+  // Quarterly estimated payment
+  const fs = fedFiling;
+  const stdDed = FEDERAL.stdDed[fs]||15000;
+  const totalIncome = grossW2 + addlIncome;
+  const fedOnTotal = calcBracketed(Math.max(0,totalIncome-stdDed), FEDERAL.brackets[fs]);
+  const fedOnW2    = calcBracketed(Math.max(0,grossW2-stdDed),     FEDERAL.brackets[fs]);
+  const fedOnSE    = fedOnTotal - fedOnW2;
+  const quarterly  = (seTax + fedOnSE) / 4;
+  return {netSE, netEarn, seTax, seDeduct, quarterly};
+}
+
+function updateSEResults(p, gross) {
+  const totalSEIncome = (p.seLines||[]).reduce((s,l)=>s+l.income,0);
+  const totalSEExpenses = (p.seLines||[]).reduce((s,l)=>s+l.expenses,0);
+  const se=calcSETax(totalSEIncome,totalSEExpenses,p.fedFiling,gross);
+  document.getElementById('se-results').innerHTML = totalSEIncome<=0 ? '' : `
+    <div class="g2" style="margin-bottom:0.85rem">
+      <div class="card vio"><div class="card-lb">SE Tax (15.3%)</div><div class="card-v">${fL2(se.seTax)}</div><div class="card-s">on ${fL2(se.netEarn)} net earnings</div></div>
+      <div class="card tel"><div class="card-lb">Deductible Half</div><div class="card-v">${fL2(se.seDeduct)}</div><div class="card-s">reduces taxable income</div></div>
+    </div>
+    <div class="ib" style="margin-bottom:0.85rem">
+      <strong>Quarterly Estimated Payment:</strong> ${fL2(se.quarterly)} &nbsp;(${fL2(se.quarterly*4)}/year)
+      <div style="margin-top:0.4rem;color:var(--mut2)">Required if you expect to owe $1,000+ in taxes. Pay by:</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.5rem">
+      ${QUARTERLY_DATES.map(q=>`
+        <div style="padding:0.5rem 0.75rem;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;font-family:'DM Mono',monospace;font-size:0.68rem">
+          <div style="color:var(--grn);font-weight:600">${q.period}</div>
+          <div style="color:var(--mut2)">Due: ${q.due}</div>
+          <div style="color:var(--mut);font-size:0.62rem">${q.months}</div>
+          <div style="color:var(--txt);font-weight:600;margin-top:0.2rem">${fL2(se.quarterly)}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── SYNC TO RETIREMENT ────────────────────────────────────
+function syncToRetirement() {
+  const on=document.getElementById('sync-retirement').checked;
+  if(!on) return;
+  savePerson();
+  const p=persons[activePerson];
+  const freq=p.payFreq;
+  const k401=p.benefits.filter(b=>b.pretax&&/401k|403b|retirement/i.test(b.name)).reduce((s,b)=>s+b.amount*freq,0);
+  if(k401>0){
+    updateNetWorth({retirement_portfolio: k401});
+    const btn=document.getElementById('sync-retirement');
+    btn.parentElement.querySelector('.tog-lb').textContent='Synced: '+fL2(k401)+'/yr to Retirement';
+  }
+}
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  savePerson();
+  const p    = persons[activePerson];
+  const gross= calcGrossAnnual(p);
+  const tx   = calcPersonTax(p, gross);
+  const freq = p.payFreq;
+  const freqLabel = {52:'Weekly',26:'Bi-weekly',24:'Semi-monthly',12:'Monthly'}[freq]||'Pay Period';
+
+  // SE results
+  updateSEResults(p, gross);
+
+  // Combined view: merge both persons
+  let dispGross = gross, dispTx = tx, dispFreq = freq, dispLabel = freqLabel;
+  if (viewMode === 'combined' && person2Activated) {
+    const p2    = persons[2];
+    const g2    = calcGrossAnnual(p2);
+    const tx2   = calcPersonTax(p2, g2);
+    dispGross   = gross + g2;
+    dispTx = {
+      grossAnnual: dispGross,
+      fedTax:      tx.fedTax + tx2.fedTax,
+      ssTax:       tx.ssTax  + tx2.ssTax,
+      medicareTax: tx.medicareTax + tx2.medicareTax,
+      stateTax:    tx.stateTax    + tx2.stateTax,
+      sdiTax:      tx.sdiTax      + tx2.sdiTax,
+      stateExtraAnnual: tx.stateExtraAnnual + tx2.stateExtraAnnual,
+      extraFedAnnual:   tx.extraFedAnnual   + tx2.extraFedAnnual,
+      totalTax:    tx.totalTax  + tx2.totalTax,
+      netAnnual:   tx.netAnnual + tx2.netAnnual,
+      effRate:     (tx.totalTax+tx2.totalTax) / (gross+g2),
+      margRate:    Math.max(tx.margRate, tx2.margRate),
+      pretaxBenAnnual:  tx.pretaxBenAnnual  + tx2.pretaxBenAnnual,
+      postTaxBenAnnual: tx.postTaxBenAnnual + tx2.postTaxBenAnnual,
+      fedTaxable: tx.fedTaxable + tx2.fedTaxable,
+      stdDed: tx.stdDed + tx2.stdDed,
+      freq: freq,
+    };
+  }
+  // Use display values for all UI rendering below
+  const dGross = dispGross, dTx = dispTx;
+
+  // Donut
+  const donutData=[Math.max(0,dTx.netAnnual), dTx.fedTax, dTx.ssTax+dTx.medicareTax, dTx.stateTax+dTx.sdiTax, dTx.pretaxBenAnnual];
+  const donutLabels=['Take Home','Federal Tax','FICA','State Tax','Benefits'];
+  const donutColors=['#4ade80','#f87171','#fb923c','#a78bfa','#60a5fa'];
+  if(donutChart){
+    donutChart.data.datasets[0].data=donutData;
+    donutChart.update('none');
+  } else {
+    donutChart=new Chart(document.getElementById('donut-chart'),{
+      type:'doughnut',
+      data:{labels:donutLabels,datasets:[{data:donutData,backgroundColor:donutColors,borderWidth:0,hoverOffset:4}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${cdTx.label}: ${fL2(cdTx.raw)} (${dGross>0?(cdTx.raw/gross*100).toFixed(1):0}%)`}}}}
+    });
+  }
+  document.getElementById('donut-center').textContent=fL2(dTx.netAnnual/freq);
+  document.getElementById('donut-center-sub').textContent=freqLabel.toLowerCase();
+  document.getElementById('donut-legend').innerHTML=donutLabels.map((l,i)=>
+    `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.2rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${donutColors[i]};display:inline-block"></span>${l}</span>
+      <span style="font-weight:600">${fL2(donutData[i])}</span>
+    </div>`).join('');
+
+  // Stat cards
+  document.getElementById('st-annual-net').textContent=fS(dTx.netAnnual);
+  document.getElementById('st-annual-tax').textContent=fS(dTx.totalTax);
+  document.getElementById('st-eff-rate').textContent=(dTx.effRate*100).toFixed(1)+'%';
+  document.getElementById('st-marginal').textContent=(dTx.margRate*100).toFixed(0)+'%';
+
+  // Period title
+  document.getElementById('period-title').textContent=freqLabel+' Breakdown';
+
+  // Per-period breakdown
+  function sr(lbl,val,color){
+    return `<div class="srow"><span style="color:var(--mut2)">${lbl}</span><span style="color:${color||'var(--txt)'};font-weight:600">${fL2(val)}</span></div>`;
+  }
+  document.getElementById('period-breakdown').innerHTML=
+    sr('Gross Pay', dGross/freq, 'var(--grn)')+
+    sr('Federal Income Tax', dTx.fedTax/freq, 'var(--red)')+
+    sr('Social Security (6.2%)', dTx.ssTax/freq, 'var(--red)')+
+    sr('Medicare (1.45%)', dTx.medicareTax/freq, 'var(--red)')+
+    (dTx.stateTax>0?sr('State Income Tax', dTx.stateTax/freq, 'var(--red)'):'')+
+    (dTx.sdiTax>0?sr('SDI/SUI', dTx.sdiTax/freq, 'var(--red)'):'')+
+    (dTx.stateExtraAnnual>0?sr('Extra State Withholding', dTx.stateExtraAnnual/freq, 'var(--red)'):'')+
+    (dTx.extraFedAnnual>0?sr('Extra Federal Withholding', dTx.extraFedAnnual/freq, 'var(--red)'):'')+
+    (dTx.pretaxBenAnnual>0?sr('Pre-tax Benefits', dTx.pretaxBenAnnual/freq, 'var(--blu)'):'')+
+    (dTx.postTaxBenAnnual>0?sr('Post-tax Benefits', dTx.postTaxBenAnnual/freq, 'var(--amb)'):'')+
+    `<div class="srow" style="border-top:1px solid var(--bdr2);margin-top:0.3rem"><span style="font-weight:700">Net Take-Home</span><span style="font-size:1.05rem;font-weight:700;color:var(--grn)">${fL2(dTx.netAnnual/freq)}</span></div>`;
+
+  // Annual breakdown
+  document.getElementById('annual-breakdown').innerHTML=
+    sr('Annual Gross', gross, 'var(--grn)')+
+    sr('Federal Income Tax', dTx.fedTax, 'var(--red)')+
+    sr('Social Security', dTx.ssTax, 'var(--red)')+
+    sr('Medicare', dTx.medicareTax, 'var(--red)')+
+    (dTx.stateTax>0?sr('State Income Tax', dTx.stateTax, 'var(--red)'):'')+
+    (dTx.sdiTax>0?sr('SDI/Other State', dTx.sdiTax, 'var(--red)'):'')+
+    (dTx.pretaxBenAnnual>0?sr('Pre-tax Benefits', dTx.pretaxBenAnnual, 'var(--blu)'):'')+
+    (dTx.postTaxBenAnnual>0?sr('Post-tax Benefits', dTx.postTaxBenAnnual, 'var(--amb)'):'')+
+    sr('Total Taxes', dTx.totalTax, 'var(--red)')+
+    `<div class="srow" style="border-top:1px solid var(--bdr2);margin-top:0.3rem"><span style="font-weight:700">Annual Net Pay</span><span style="font-size:1.05rem;font-weight:700;color:var(--grn)">${fL2(dTx.netAnnual)}</span></div>`;
+
+  // Bracket chart
+  const bks=FEDERAL.brackets[p.fedFiling]||FEDERAL.brackets.single;
+  const bkLabels=bks.filter(b=>b.max!==Infinity).map(b=>(b.rate*100).toFixed(0)+'%').concat([(bks[bks.length-1].rate*100).toFixed(0)+'%']);
+  const bkAmounts=bks.map(b=>Math.max(0,Math.min(dTx.fedTaxable,b.max)-b.min));
+  const bkColors=bks.map(b=>dTx.fedTaxable>b.min?'rgba(248,113,113,0.7)':'rgba(248,113,113,0.15)');
+
+  if(bracketChart){
+    bracketChart.data.labels=bkLabels;
+    bracketChart.data.datasets[0].data=bkAmounts;
+    bracketChart.data.datasets[0].backgroundColor=bkColors;
+    bracketChart.update('none');
+  } else {
+    bracketChart=new Chart(document.getElementById('bracket-chart'),{
+      type:'bar',
+      data:{labels:bkLabels,datasets:[{label:'Income in bracket',data:bkAmounts,backgroundColor:bkColors,borderRadius:3}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:150},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` $${Math.round(cdTx.raw).toLocaleString()} in this bracket`}}},
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:10}},grid:{display:false}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // Update net worth
+  updateNetWorth({ savings_total: tx.netAnnual });
+}
+
+// ── SAVE/LOAD ─────────────────────────────────────────────
+function doSave(){
+  savePerson();
+  storeSave('fin_paycheck_v1',{persons,activePerson});
+  showSaveConfirm();
+}
+function loadSaved(){
+  const s=storeLoad('fin_paycheck_v1');
+  if(!s) return;
+  if(s.persons) persons=s.persons;
+  if(s.activePerson) activePerson=s.activePerson;
+}
+
+function doExport(){
+  document.getElementById('pr-inner').innerHTML=`
+    <style>body{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt}h1{font-size:14pt;border-bottom:2px solid #111;padding-bottom:3mm;margin-bottom:4mm}
+    .row{display:flex;justify-content:space-between;border-bottom:0.4px solid #eee;padding:1.5mm 0;font-size:8pt}</style>
+    <h1>Paycheck Calculator Report</h1>
+    ${document.getElementById('annual-breakdown').innerHTML}`;
+  window.print();
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+// ── INIT ─────────────────────────────────────────────────
+document.getElementById('pay-date').value=new Date().toISOString().split('T')[0];
+initStateDropdowns();
+loadSaved();
+loadPerson();
+render();
+</script>
+</body>
+</html>

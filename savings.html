@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Savings Tracker — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:1fr 360px;gap:1.25rem;align-items:start}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}}
+.right{display:flex;flex-direction:column;gap:1.25rem;position:sticky;top:5rem}
+.left{display:flex;flex-direction:column;gap:1.25rem}
+/* Account row */
+.acc-row{display:grid;grid-template-columns:150px 105px 105px 80px 1fr auto;gap:0.4rem;align-items:center;margin-bottom:0.5rem}
+.col-hdr{font-size:0.58rem;font-family:'DM Mono',monospace;color:var(--mut);padding-bottom:0.3rem}
+/* Summary rows */
+.srow{display:flex;justify-content:space-between;padding:0.38rem 0;border-bottom:1px solid var(--bdr);font-family:'DM Mono',monospace;font-size:0.75rem}
+.srow:last-child{border-bottom:none}
+@media(max-width:768px){
+  .right{position:static}
+  .acc-row{grid-template-columns:1fr 90px 80px auto !important;gap:0.3rem}
+  .col-hdr:nth-child(3),.col-hdr:nth-child(4){display:none}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('savings')</script>
+
+<div class="page">
+  <!-- HEADER -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Savings Tracker</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">accounts · contributions · growth · projections</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- GLOBAL CONFIG -->
+  <div class="panel" style="margin-bottom:1.25rem">
+    <div style="display:flex;gap:1.25rem;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="min-width:190px">
+        <label>Gross Annual Income ($)</label>
+        <div class="input-wrap"><input type="number" id="gross-income" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+      </div>
+      <div class="field" style="min-width:130px">
+        <label>Projection Years</label>
+        <div class="input-wrap"><input type="number" id="proj-years" value="20" min="1" max="50" oninput="render()"><span class="unit">yrs</span></div>
+      </div>
+      <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--mut2)">
+        <span>Total Balance: <strong id="hdr-total" style="color:var(--grn)">—</strong></span>
+        <span>Monthly Contributions: <strong id="hdr-monthly" style="color:var(--blu)">—</strong></span>
+        <span>% of Gross: <strong id="hdr-pct" style="color:var(--tel)">—</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="left">
+
+      <!-- ACCOUNTS TABLE -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="sect-title" style="margin:0">Savings Accounts</div>
+          <button class="btn grn" onclick="addAccount()" style="padding:0.28rem 0.6rem;font-size:0.65rem">+ Add Account</button>
+        </div>
+        <div class="acc-row" style="margin-bottom:0.2rem">
+          <div class="col-hdr">Account Name</div>
+          <div class="col-hdr" style="text-align:right">Balance ($)</div>
+          <div class="col-hdr" style="text-align:right">Monthly Add ($)</div>
+          <div class="col-hdr" style="text-align:right">Growth %</div>
+          <div class="col-hdr">Purpose / Label</div>
+          <div></div>
+        </div>
+        <div id="accounts-list"></div>
+        <div style="border-top:1px solid var(--bdr2);margin-top:0.6rem;padding-top:0.6rem;display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem">
+          <div style="font-family:'DM Mono',monospace;font-size:0.73rem">
+            <div style="color:var(--mut);font-size:0.62rem;margin-bottom:0.15rem">Total Balance</div>
+            <div style="font-weight:600" id="total-balance">$0.00</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:0.73rem">
+            <div style="color:var(--mut);font-size:0.62rem;margin-bottom:0.15rem">Monthly Adding</div>
+            <div style="font-weight:600" id="total-monthly">$0.00</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:0.73rem">
+            <div style="color:var(--mut);font-size:0.62rem;margin-bottom:0.15rem">% of Gross Income</div>
+            <div style="font-weight:600;color:var(--tel)" id="total-pct">0.00%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROJECTION TABLE -->
+      <div class="panel">
+        <div class="sect-title">Growth Projection</div>
+        <div class="table-wrap">
+          <table id="proj-table">
+            <thead><tr id="proj-thead"></tr></thead>
+            <tbody id="proj-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /left -->
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="right">
+
+      <!-- STAT CARDS -->
+      <div class="g2">
+        <div class="card grn"><div class="card-lb">Total Now</div><div class="card-v" id="st-total">—</div></div>
+        <div class="card blu"><div class="card-lb">Monthly Adding</div><div class="card-v" id="st-monthly">—</div></div>
+      </div>
+      <div class="g2">
+        <div class="card tel"><div class="card-lb">Projected (<span id="st-yr-lbl">20</span> yrs)</div><div class="card-v" id="st-proj">—</div></div>
+        <div class="card amb"><div class="card-lb">Annual Contributions</div><div class="card-v" id="st-annual">—</div></div>
+      </div>
+
+      <!-- GROWTH CHART -->
+      <div class="panel">
+        <div class="sect-title">Savings Growth</div>
+        <div style="position:relative;width:100%;height:220px">
+          <canvas id="growth-chart" role="img" aria-label="Savings growth projection chart"></canvas>
+        </div>
+      </div>
+
+      <!-- BREAKDOWN DONUT -->
+      <div class="panel">
+        <div class="sect-title">Account Breakdown</div>
+        <div style="position:relative;height:200px">
+          <canvas id="pie-chart" role="img" aria-label="Account breakdown donut chart"></canvas>
+        </div>
+        <div id="pie-legend" style="margin-top:0.75rem"></div>
+      </div>
+
+    </div><!-- /right -->
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// MATH ENGINE
+// FV = P*(1+r)^n + PMT*12*((1+r)^n - 1)/r
+// Verified: $65,375 / $2,634.84/mo / 7% / 20yr = ~$1,549,179
+// Savings rate: $3,118.44/mo / $237,730 gross = 15.74% (exact)
+// ============================================================
+function projectFV(balance, monthly, annualRate, years) {
+  if (years <= 0) return balance;
+  if (annualRate === 0) return balance + monthly * 12 * years;
+  const r = annualRate / 100;
+  return balance * Math.pow(1+r, years) + monthly * 12 * (Math.pow(1+r, years) - 1) / r;
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let accounts = [
+  {id:1, name:'Cash Reserves',    balance:4500,   monthly:0,       rate:1.5, label:'Building Emergency'},
+  {id:2, name:'401k Retirement',  balance:65375,  monthly:2634.84, rate:7,   label:'Payroll'},
+  {id:3, name:'Roth IRA',         balance:2128,   monthly:0,       rate:7,   label:'Post Tax'},
+  {id:4, name:'401k (Spouse)',    balance:25795,  monthly:483.60,  rate:7,   label:'Payroll'},
+  {id:5, name:'Roth IRA (Spouse)',balance:2334,   monthly:0,       rate:7,   label:'Post Tax'},
+  {id:6, name:'Crypto',           balance:0,      monthly:0,       rate:0,   label:''},
+];
+let nextAccId  = 20;
+let growthChart = null;
+let pieChart    = null;
+
+const CHART_COLORS = ['#4ade80','#60a5fa','#fb923c','#c084fc','#2dd4bf','#f87171','#f59e0b','#a78bfa','#34d399','#38bdf8'];
+
+// ── ACCOUNTS ──────────────────────────────────────────────
+function addAccount() {
+  accounts.push({id:nextAccId++, name:'New Account', balance:0, monthly:0, rate:3, label:''});
+  renderAccounts(); render();
+}
+function removeAccount(id) { accounts=accounts.filter(a=>a.id!==id); renderAccounts(); render(); }
+function setAcc(id, key, val) { const a=accounts.find(a=>a.id===id); if(a){a[key]=val; render();} }
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function renderAccounts() {
+  const list = document.getElementById('accounts-list');
+  list.innerHTML = '';
+  accounts.forEach((a,i) => {
+    const dot = CHART_COLORS[i % CHART_COLORS.length];
+    const div = document.createElement('div');
+    div.className = 'acc-row';
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:0.4rem">
+        <span style="width:8px;height:8px;border-radius:2px;background:${dot};flex-shrink:0;display:inline-block"></span>
+        <input class="input-bare" type="text" value="${esc(a.name)}" oninput="setAcc(${a.id},'name',this.value)" style="font-size:0.78rem">
+      </div>
+      <div class="input-wrap">
+        <input type="number" value="${a.balance}" min="0" step="0.01"
+          oninput="setAcc(${a.id},'balance',+this.value||0)" style="font-size:0.78rem">
+        <span class="unit">$</span>
+      </div>
+      <div class="input-wrap">
+        <input type="number" value="${a.monthly}" min="0" step="0.01"
+          oninput="setAcc(${a.id},'monthly',+this.value||0)" style="font-size:0.78rem">
+        <span class="unit">$</span>
+      </div>
+      <div class="input-wrap">
+        <input type="number" value="${a.rate}" min="0" max="30" step="0.1"
+          oninput="setAcc(${a.id},'rate',+this.value||0)" style="font-size:0.78rem">
+        <span class="unit">%</span>
+      </div>
+      <input class="input-bare" type="text" value="${esc(a.label)}" placeholder="Purpose..."
+        oninput="setAcc(${a.id},'label',this.value)" style="font-size:0.72rem">
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeAccount(${a.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  const gross    = +document.getElementById('gross-income').value || 0;
+  const projYrs  = Math.max(1, +document.getElementById('proj-years').value || 20);
+
+  const totalBal     = accounts.reduce((s,a) => s+a.balance, 0);
+  const totalMonthly = accounts.reduce((s,a) => s+a.monthly, 0);
+  const totalAnnual  = totalMonthly * 12;
+  const savingsPct   = gross > 0 ? (totalAnnual/gross*100).toFixed(2) : '0.00';
+  const projTotal    = accounts.reduce((s,a) => s+projectFV(a.balance, a.monthly, a.rate, projYrs), 0);
+
+  // Header stats
+  document.getElementById('hdr-total').textContent   = fL2(totalBal);
+  document.getElementById('hdr-monthly').textContent = fL2(totalMonthly);
+  document.getElementById('hdr-pct').textContent     = savingsPct+'%';
+  document.getElementById('total-balance').textContent = fL2(totalBal);
+  document.getElementById('total-monthly').textContent = fL2(totalMonthly);
+  document.getElementById('total-pct').textContent     = savingsPct+'%';
+
+  // Stat cards
+  document.getElementById('st-total').textContent   = fS(totalBal);
+  document.getElementById('st-monthly').textContent = fL2(totalMonthly);
+  document.getElementById('st-proj').textContent    = fS(projTotal);
+  document.getElementById('st-annual').textContent  = fL2(totalAnnual);
+  document.getElementById('st-yr-lbl').textContent  = projYrs;
+
+  // ── Projection table
+  const thead = document.getElementById('proj-thead');
+  const tbody  = document.getElementById('proj-tbody');
+  thead.innerHTML = '<th style="text-align:left">Year</th>' +
+    accounts.map(a=>`<th>${esc(a.name)}</th>`).join('') +
+    '<th style="color:#4ade80">Total</th>' +
+    '<th>Annual Contrib</th>';
+
+  tbody.innerHTML = '';
+
+  // Show year 0, then every year, for line chart; table shows milestone years
+  const milestones = new Set([0,1,2,3,5,10,15,20,25,30].filter(y=>y<=projYrs));
+  milestones.add(projYrs);
+
+  const chartLabels = [], chartTotals = [];
+  for (let y = 0; y <= projYrs; y++) {
+    const vals  = accounts.map(a => projectFV(a.balance, a.monthly, a.rate, y));
+    const total = vals.reduce((s,v)=>s+v, 0);
+    chartLabels.push(y===0?'Now':'Yr '+y);
+    chartTotals.push(total);
+
+    if (milestones.has(y)) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td style="font-weight:${y===0||y===projYrs?'600':'400'}">${y===0?'Now':'Year '+y}</td>` +
+        vals.map((v,i)=>`<td style="color:${CHART_COLORS[i%CHART_COLORS.length]}">${fS(v)}</td>`).join('') +
+        `<td style="font-weight:600;color:var(--grn)">${fS(total)}</td>` +
+        `<td style="color:var(--mut)">${fL2(totalAnnual)}/yr</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ── Growth line chart
+  if (growthChart) {
+    growthChart.data.labels = chartLabels;
+    growthChart.data.datasets[0].data = chartTotals;
+    growthChart.update('none');
+  } else {
+    growthChart = new Chart(document.getElementById('growth-chart'), {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets:[{
+          label: 'Total Savings',
+          data:  chartTotals,
+          borderColor: '#4ade80',
+          backgroundColor: 'rgba(74,222,128,0.07)',
+          fill: true, tension: 0.3, pointRadius: 0,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:{duration:150},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>`  Total: ${fL2(ctx.raw)}`}}
+        },
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9},maxTicksLimit:8}, grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}}, grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // ── Breakdown donut (current balances)
+  const pieData   = accounts.filter(a=>a.balance>0).map(a=>a.balance);
+  const pieLabels = accounts.filter(a=>a.balance>0).map(a=>a.name);
+  const pieColors = accounts.filter(a=>a.balance>0).map((_,i)=>CHART_COLORS[i%CHART_COLORS.length]);
+
+  if (pieChart) {
+    pieChart.data.labels           = pieLabels;
+    pieChart.data.datasets[0].data = pieData;
+    pieChart.data.datasets[0].backgroundColor = pieColors;
+    pieChart.update('none');
+  } else {
+    pieChart = new Chart(document.getElementById('pie-chart'), {
+      type: 'doughnut',
+      data: { labels:pieLabels, datasets:[{data:pieData, backgroundColor:pieColors, borderWidth:0, hoverOffset:4}] },
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:'55%',
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>`  ${ctx.label}: ${fL2(ctx.raw)} (${totalBal>0?(ctx.raw/totalBal*100).toFixed(1):0}%)`}}
+        }
+      }
+    });
+  }
+
+  // Donut legend
+  document.getElementById('pie-legend').innerHTML = pieLabels.map((l,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.7rem;margin-bottom:0.3rem">
+      <span style="display:flex;align-items:center;gap:0.4rem">
+        <span style="width:9px;height:9px;border-radius:2px;background:${pieColors[i]};display:inline-block;flex-shrink:0"></span>
+        <span style="color:var(--mut2)">${esc(l)}</span>
+      </span>
+      <span style="font-weight:600;margin-left:0.75rem">${fL2(pieData[i])}</span>
+    </div>`).join('');
+
+  // Update net worth widget
+  updateNetWorth({ savings_total: totalBal });
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────
+function doSave() {
+  storeSave(KEYS.savings, {
+    accounts, nextAccId,
+    gross:     document.getElementById('gross-income').value,
+    projYears: document.getElementById('proj-years').value,
+  });
+  showSaveConfirm();
+}
+
+function loadSaved() {
+  const s = storeLoad(KEYS.savings);
+  if (!s) return;
+  if (s.accounts)  accounts  = s.accounts;
+  if (s.nextAccId) nextAccId = s.nextAccId;
+  if (s.gross)     document.getElementById('gross-income').value = s.gross;
+  if (s.projYears) document.getElementById('proj-years').value   = s.projYears;
+}
+
+// ── EXPORT PDF ────────────────────────────────────────────
+function doExport() {
+  const C = { dark:'#111827', muted:'#64748b', bg:'#f8fafc', border:'#e2e8f0', grn:'#16a34a', blu:'#2563eb', tel:'#0d9488', amb:'#d97706' };
+  const css = `*{box-sizing:border-box}body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:8.5pt;color:${C.dark}}
+    h1{font-size:15pt;font-weight:700;border-bottom:2px solid ${C.dark};padding-bottom:3mm;margin-bottom:5mm}
+    h2{font-size:9.5pt;font-weight:700;margin:4mm 0 2mm;border-bottom:1px solid ${C.border};padding-bottom:1mm}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}
+    .card{background:${C.bg};border:1px solid ${C.border};border-radius:3px;padding:2.5mm;position:relative;overflow:hidden}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+    .card.grn::before{background:${C.grn}}.card.blu::before{background:${C.blu}}.card.tel::before{background:${C.tel}}.card.amb::before{background:${C.amb}}
+    .card-lb{font-size:6pt;color:${C.muted};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1mm}
+    .card-v{font-size:12pt;font-weight:700}
+    .card.grn .card-v{color:${C.grn}}.card.blu .card-v{color:${C.blu}}.card.tel .card-v{color:${C.tel}}.card.amb .card-v{color:${C.amb}}
+    table{width:100%;border-collapse:collapse;font-size:7.5pt}
+    th{text-align:right;padding:1.5mm 2mm;border-bottom:1px solid ${C.dark};color:${C.muted};font-size:6.5pt;text-transform:uppercase;font-weight:600}
+    th:first-child{text-align:left}
+    td{text-align:right;padding:1.5mm 2mm;border-bottom:0.4px solid ${C.border}}
+    td:first-child{text-align:left;color:${C.muted}}`;
+
+  document.getElementById('pr-inner').innerHTML = `<style>${css}</style>
+    <h1>Savings Report</h1>
+    <div class="g4">
+      <div class="card grn"><div class="card-lb">Total Balance</div><div class="card-v">${document.getElementById('st-total').textContent}</div></div>
+      <div class="card blu"><div class="card-lb">Monthly Adding</div><div class="card-v">${document.getElementById('st-monthly').textContent}</div></div>
+      <div class="card tel"><div class="card-lb">Projected (${document.getElementById('proj-years').value}yr)</div><div class="card-v">${document.getElementById('st-proj').textContent}</div></div>
+      <div class="card amb"><div class="card-lb">Annual Contributions</div><div class="card-v">${document.getElementById('st-annual').textContent}</div></div>
+    </div>
+    <h2>Growth Projection</h2>
+    ${document.getElementById('proj-table').outerHTML}`;
+  window.print();
+}
+
+// ── INIT ─────────────────────────────────────────────────
+['gross-income','proj-years'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', render);
+});
+
+loadSaved();
+renderAccounts();
+render();
+</script>
+</body>
+</html>

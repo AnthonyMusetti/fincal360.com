@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rental Property Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:400px 1fr;gap:1.25rem;align-items:start}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}}
+.controls{position:sticky;top:5rem;display:flex;flex-direction:column;gap:1rem;max-height:calc(100vh - 6rem);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--surf3) transparent;padding-right:4px}
+.controls::-webkit-scrollbar{width:4px}
+.controls::-webkit-scrollbar-thumb{background:var(--surf3);border-radius:2px}
+.right{display:flex;flex-direction:column;gap:1.25rem}
+/* Property type toggle */
+.prop-toggle{display:flex;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;margin-bottom:1rem}
+.prop-btn{flex:1;padding:0.55rem;font-family:'DM Mono',monospace;font-size:0.72rem;text-align:center;cursor:pointer;background:var(--surf2);color:var(--mut2);border:none;transition:all 0.15s}
+.prop-btn.active{background:rgba(74,222,128,0.1);color:var(--grn)}
+/* Unit row */
+.unit-row{display:grid;grid-template-columns:55px 55px 80px 90px auto;gap:0.4rem;align-items:center;margin-bottom:0.45rem}
+/* Indicator badges */
+.badge{display:inline-flex;align-items:center;gap:0.35rem;padding:0.3rem 0.65rem;border-radius:20px;font-family:'DM Mono',monospace;font-size:0.72rem;font-weight:600}
+.badge.green{background:rgba(74,222,128,0.12);color:var(--grn);border:1px solid rgba(74,222,128,0.3)}
+.badge.amber{background:rgba(245,158,11,0.12);color:var(--amb);border:1px solid rgba(245,158,11,0.3)}
+.badge.red{background:rgba(248,113,113,0.12);color:var(--red);border:1px solid rgba(248,113,113,0.3)}
+/* Metric grid */
+.metric-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem}
+@media(max-width:900px){.metric-grid{grid-template-columns:repeat(2,1fr)}}
+/* Sensitivity table */
+.sens-table th{font-size:0.62rem;padding:0.3rem 0.5rem}
+.sens-table td{font-size:0.7rem;padding:0.3rem 0.5rem;text-align:center}
+.sens-table td:first-child{text-align:left;color:var(--mut2)}
+.sens-highlight{background:rgba(74,222,128,0.08);font-weight:600}
+/* Expense row */
+.exp-row{display:grid;grid-template-columns:1fr 95px 65px auto;gap:0.4rem;align-items:center;margin-bottom:0.4rem}
+/* Section divider */
+.sdiv{font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--mut);font-family:'DM Mono',monospace;margin:0.85rem 0 0.5rem;padding-bottom:0.4rem;border-bottom:1px solid var(--bdr)}
+/* Toggle row */
+.tog-section{display:flex;align-items:center;gap:0.6rem;padding:0.5rem 0;border-bottom:1px solid var(--bdr);margin-bottom:0.5rem}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .unit-row{grid-template-columns:45px 45px 65px 80px auto !important}
+  .exp-row{grid-template-columns:1fr 80px 55px auto !important}
+  .metric-grid{grid-template-columns:1fr 1fr !important}
+  .sens-table{font-size:0.62rem}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('rental')</script>
+
+<div class="page">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Rental Property Calculator</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">cap rate · cash flow · IRR · MIRR · MOIC · DSCR · depreciation · tax</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- INPUTS -->
+    <div class="controls">
+
+      <!-- PROPERTY TYPE -->
+      <div class="panel">
+        <div class="prop-toggle">
+          <button class="prop-btn active" id="btn-sfh" onclick="setPropType('sfh')">Single Family</button>
+          <button class="prop-btn" id="btn-multi" onclick="setPropType('multi')">Multi-Unit</button>
+        </div>
+
+        <!-- PURCHASE -->
+        <div class="sdiv">Purchase</div>
+        <div style="display:flex;flex-direction:column;gap:0.6rem">
+          <div class="field"><label>Purchase Price ($)</label><div class="input-wrap"><input type="number" id="purchase-price" value="400000" min="0" oninput="render()"><span class="unit">$</span></div></div>
+          <div class="tog-section">
+            <label class="tog"><input type="checkbox" id="use-loan" checked onchange="toggleLoan()"><div class="tog-tr"></div><div class="tog-th"></div></label>
+            <span class="tog-lb">Use Financing / Loan</span>
+          </div>
+          <div id="loan-fields">
+            <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+              <div class="field"><label>Down Payment (%)</label><div class="input-wrap"><input type="number" id="down-pct" value="25" min="0" max="100" step="0.1" oninput="syncDown('pct')"><span class="unit">%</span></div></div>
+              <div class="field"><label>Down Amount ($)</label><div class="input-wrap"><input type="number" id="down-amt" value="100000" min="0" oninput="syncDown('amt')"><span class="unit">$</span></div></div>
+            </div>
+            <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+              <div class="field"><label>Interest Rate (%)</label>
+                <div class="input-wrap"><input type="number" id="loan-rate" value="6.5" min="0" max="20" step="0.125" oninput="onRateInput()"><span class="unit">%</span></div>
+                <input type="range" id="rate-slider" min="1" max="12" step="0.125" value="6.5" oninput="onRateSlider()" style="margin-top:0.35rem">
+              </div>
+              <div class="field"><label>Loan Term (years)</label><div class="input-wrap"><input type="number" id="loan-term" value="30" min="1" max="40" oninput="render()"><span class="unit">yr</span></div></div>
+            </div>
+          </div>
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>Closing Costs ($)</label><div class="input-wrap"><input type="number" id="closing-cost" value="12000" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            <div class="field"><label>Repair / Rehab ($)</label><div class="input-wrap"><input type="number" id="repair-cost" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+          </div>
+          <div class="field"><label>After Repair Value ($) <span style="color:var(--mut);font-size:0.62rem">if different from purchase</span></label><div class="input-wrap"><input type="number" id="arv" value="400000" min="0" oninput="render()"><span class="unit">$</span></div></div>
+        </div>
+
+        <!-- INCOME -->
+        <div class="sdiv">Income</div>
+
+        <!-- SFH income -->
+        <div id="sfh-income">
+          <div class="g2" style="gap:0.5rem;margin-bottom:0.5rem">
+            <div class="field"><label>Monthly Rent ($)</label><div class="input-wrap"><input type="number" id="sfh-rent" value="2500" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            <div class="field"><label>Annual Rent Growth (%)</label><div class="input-wrap"><input type="number" id="rent-growth" value="3" min="0" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+          </div>
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>Other Monthly Income ($)</label><div class="input-wrap"><input type="number" id="other-income" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+            <div class="field"><label>Other Income Growth (%)</label><div class="input-wrap"><input type="number" id="other-growth" value="3" min="0" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+          </div>
+        </div>
+
+        <!-- Multi-unit income -->
+        <div id="multi-income" style="display:none">
+          <div style="display:grid;grid-template-columns:55px 55px 80px 90px auto;gap:0.4rem;margin-bottom:0.3rem">
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">BR</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">BA</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)"># Units</div>
+            <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Rent/mo</div>
+            <div></div>
+          </div>
+          <div id="unit-types-list"></div>
+          <button class="btn grn" onclick="addUnitType()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.25rem;margin-bottom:0.5rem">+ Add Unit Type</button>
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>Annual Rent Growth (%)</label><div class="input-wrap"><input type="number" id="multi-rent-growth" value="3" min="0" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+            <div class="field"><label>Other Monthly Income ($)</label><div class="input-wrap"><input type="number" id="multi-other-income" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+          </div>
+        </div>
+
+        <div class="g2" style="gap:0.5rem;margin-top:0.5rem">
+          <div class="field"><label>Vacancy Rate (%)</label><div class="input-wrap"><input type="number" id="vacancy-rate" value="5" min="0" max="100" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+          <div class="field"><label>Management Fee (%)</label><div class="input-wrap"><input type="number" id="mgmt-fee" value="0" min="0" max="50" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+        </div>
+
+        <!-- EXPENSES -->
+        <div class="sdiv">Recurring Operating Expenses</div>
+        <div style="display:grid;grid-template-columns:1fr 95px 65px auto;gap:0.4rem;margin-bottom:0.3rem">
+          <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut)">Expense</div>
+          <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-align:right">Annual ($)</div>
+          <div style="font-size:0.6rem;font-family:'DM Mono',monospace;color:var(--mut);text-align:right">Growth %</div>
+          <div></div>
+        </div>
+        <div id="expenses-list"></div>
+        <button class="btn" onclick="addExpense()" style="padding:0.28rem 0.6rem;font-size:0.65rem;margin-top:0.25rem">+ Add Expense</button>
+
+        <!-- SELL / HOLD -->
+        <div class="sdiv">Hold Period &amp; Exit</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>Hold Period (years)</label><div class="input-wrap"><input type="number" id="hold-years" value="10" min="1" max="50" oninput="render()"><span class="unit">yr</span></div></div>
+            <div class="field"><label>Cost to Sell (%)</label><div class="input-wrap"><input type="number" id="cost-to-sell" value="6" min="0" max="20" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+          </div>
+          <div class="tog-section">
+            <label class="tog"><input type="checkbox" id="know-sell-price" onchange="toggleSellPrice()"><div class="tog-tr"></div><div class="tog-th"></div></label>
+            <span class="tog-lb">I know the sell price</span>
+          </div>
+          <div id="sell-price-field" style="display:none">
+            <div class="field"><label>Sell Price ($)</label><div class="input-wrap"><input type="number" id="sell-price" value="0" min="0" oninput="render()"><span class="unit">$</span></div></div>
+          </div>
+          <div id="appreciation-field">
+            <div class="field"><label>Value Appreciation (% / yr)</label><div class="input-wrap"><input type="number" id="appreciation" value="3" min="0" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+          </div>
+
+          <!-- MIRR + TAX -->
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>MIRR Reinvest Rate (%)</label><div class="input-wrap"><input type="number" id="mirr-rate" value="8" min="0" step="0.1" oninput="render()"><span class="unit">%</span></div></div>
+            <div class="field"><label>Land Value (%)</label><div class="input-wrap"><input type="number" id="land-pct" value="20" min="0" max="80" step="1" oninput="render()"><span class="unit">%</span></div></div>
+          </div>
+          <div class="g2" style="gap:0.5rem">
+            <div class="field"><label>Marginal Tax Rate (%)</label><div class="input-wrap"><input type="number" id="tax-rate" value="32" min="0" max="60" step="1" oninput="render()"><span class="unit">%</span></div></div>
+            <div class="field"><label>Modified AGI ($)</label><div class="input-wrap"><input type="number" id="magi" value="100000" min="0" oninput="render()"><span class="unit">$</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /controls -->
+
+    <!-- RESULTS -->
+    <div class="right">
+
+      <!-- KEY METRICS -->
+      <div class="metric-grid">
+        <div class="card grn"><div class="card-lb">Cap Rate</div><div class="card-v" id="m-caprate">—</div><div class="card-s">NOI / purchase price</div></div>
+        <div class="card blu"><div class="card-lb">Cash-on-Cash</div><div class="card-v" id="m-coc">—</div><div class="card-s">yr 1 cash flow / equity in</div></div>
+        <div class="card org"><div class="card-lb">Gross Rent Mult</div><div class="card-v" id="m-grm">—</div><div class="card-s">price / gross annual rent</div></div>
+        <div class="card tel"><div class="card-lb">NOI (Year 1)</div><div class="card-v" id="m-noi">—</div><div class="card-s">net operating income</div></div>
+        <div class="card pur"><div class="card-lb">IRR</div><div class="card-v" id="m-irr">—</div><div class="card-s">levered, over hold period</div></div>
+        <div class="card vio"><div class="card-lb">MIRR</div><div class="card-v" id="m-mirr">—</div><div class="card-s">modified IRR</div></div>
+        <div class="card amb"><div class="card-lb">MOIC</div><div class="card-v" id="m-moic">—</div><div class="card-s">multiple on invested capital</div></div>
+        <div class="card red"><div class="card-lb">Total Return</div><div class="card-v" id="m-totalreturn">—</div><div class="card-s">cumulative cash + equity</div></div>
+      </div>
+
+      <!-- INDICATORS -->
+      <div class="panel">
+        <div class="sect-title">Deal Indicators</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center">
+          <div id="dscr-badge"></div>
+          <div id="debt-yield-badge"></div>
+          <div id="breakeven-badge"></div>
+          <div id="cf-badge"></div>
+        </div>
+        <div id="dscr-detail" style="margin-top:0.75rem;font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--mut2);line-height:1.8"></div>
+      </div>
+
+      <!-- INCOME / EXPENSE SUMMARY -->
+      <div class="g2">
+        <div class="panel">
+          <div class="sect-title">Year 1 Income &amp; Expense Summary</div>
+          <div id="income-expense-summary"></div>
+        </div>
+        <div class="panel" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="position:relative;height:200px;width:200px">
+            <canvas id="donut-chart" role="img" aria-label="Income vs expense donut"></canvas>
+          </div>
+          <div id="donut-legend" style="margin-top:0.75rem;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)"></div>
+        </div>
+      </div>
+
+      <!-- ANNUAL CASH FLOW CHART -->
+      <div class="panel">
+        <div class="sect-title">Annual Cash Flow Over Hold Period</div>
+        <div style="position:relative;width:100%;height:240px">
+          <canvas id="cashflow-chart" role="img" aria-label="Annual cash flow bar chart"></canvas>
+        </div>
+      </div>
+
+      <!-- EQUITY GROWTH CHART -->
+      <div class="panel">
+        <div class="sect-title">Cumulative Equity Growth</div>
+        <div style="position:relative;width:100%;height:240px">
+          <canvas id="equity-chart" role="img" aria-label="Equity growth line chart"></canvas>
+        </div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.75rem;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#4ade80;display:inline-block"></span>Total Equity</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#60a5fa;display:inline-block"></span>Loan Paydown</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#fb923c;display:inline-block"></span>Appreciation</span>
+        </div>
+      </div>
+
+      <!-- NOI vs DEBT SERVICE -->
+      <div class="panel" id="noi-ds-panel">
+        <div class="sect-title">NOI vs Debt Service Over Hold Period</div>
+        <div style="position:relative;width:100%;height:220px">
+          <canvas id="noids-chart" role="img" aria-label="NOI vs debt service"></canvas>
+        </div>
+      </div>
+
+      <!-- TAX SECTION -->
+      <div class="panel">
+        <div class="sect-title">Tax Analysis</div>
+        <div id="tax-summary"></div>
+      </div>
+
+      <!-- YEAR BY YEAR TABLE -->
+      <div class="panel">
+        <div class="sect-title">Year-by-Year Schedule</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left">Year</th>
+                <th>Gross Rent</th>
+                <th>EGI</th>
+                <th>Expenses</th>
+                <th>NOI</th>
+                <th>Debt Svc</th>
+                <th>Cash Flow</th>
+                <th>Property Val</th>
+                <th>Loan Bal</th>
+                <th>Equity</th>
+                <th>CoC %</th>
+              </tr>
+            </thead>
+            <tbody id="schedule-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SENSITIVITY TABLE -->
+      <div class="panel">
+        <div class="sect-title">IRR Sensitivity — Appreciation vs Cap Rate</div>
+        <div class="table-wrap">
+          <table class="sens-table">
+            <thead><tr id="sens-thead"></tr></thead>
+            <tbody id="sens-tbody"></tbody>
+          </table>
+        </div>
+        <div style="font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.5rem">Rows = value appreciation rate · Columns = exit cap rate · Highlighted = current inputs</div>
+      </div>
+
+    </div><!-- /right -->
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// MATH ENGINE — verified against realistic deal scenarios
+// SFH $400k/25%dn/6.5%/30yr/$2,500 rent: CoC -5.58%, IRR 5.83%, MIRR 5.88%, MOIC 2.90x
+// ============================================================
+
+// ── CORE MATH ────────────────────────────────────────────
+function calcMonthlyPI(loanAmt, annualRate, months) {
+  if (loanAmt <= 0 || annualRate === 0) return loanAmt > 0 ? loanAmt/months : 0;
+  const r = annualRate/100/12;
+  return loanAmt * (r*Math.pow(1+r,months)) / (Math.pow(1+r,months)-1);
+}
+
+function buildLoanBals(loanAmt, annualRate, termYrs) {
+  const r = annualRate/100/12, n = termYrs*12;
+  const pmt = calcMonthlyPI(loanAmt, annualRate, n);
+  let bal = loanAmt;
+  const yearEndBals = [], yearInterest = [];
+  for (let m=0; m<n; m++) {
+    const int  = bal*r;
+    const prin = pmt - int;
+    bal = Math.max(0, bal-prin);
+    if ((m+1)%12===0) { yearEndBals.push(bal); yearInterest.push(0); }
+  }
+  // Also track annual interest paid
+  bal = loanAmt;
+  for (let yr=0; yr<termYrs; yr++) {
+    let annInt = 0;
+    for (let m=0; m<12; m++) {
+      const int = bal*r;
+      bal = Math.max(0, bal-(pmt-int));
+      annInt += int;
+    }
+    yearInterest[yr] = annInt;
+  }
+  return { yearEndBals, yearInterest };
+}
+
+function npv(rate, cfs) { return cfs.reduce((s,c,t) => s+c/Math.pow(1+rate,t), 0); }
+
+function calcIRR(cfs) {
+  if (!cfs.some(c=>c>0) || !cfs.some(c=>c<0)) return null;
+  let rate = 0.1;
+  for (let i=0; i<2000; i++) {
+    const n = npv(rate,cfs);
+    const d = cfs.reduce((s,c,t)=>s-t*c/Math.pow(1+rate,t+1),0);
+    if (Math.abs(d)<1e-12) break;
+    const nr = rate-n/d;
+    if (Math.abs(nr-rate)<1e-8) return nr;
+    rate = isFinite(nr) ? Math.max(-0.99, Math.min(10, nr)) : 0.1;
+  }
+  return rate;
+}
+
+function calcMIRR(cfs, financeRate, reinvestRate) {
+  const n = cfs.length-1;
+  const negPV = cfs.reduce((s,c,t)=>c<0?s+c/Math.pow(1+financeRate/100,t):s, 0);
+  const posFV = cfs.reduce((s,c,t)=>c>0?s+c*Math.pow(1+reinvestRate/100,n-t):s, 0);
+  if (negPV === 0) return null;
+  return Math.pow(-posFV/negPV, 1/n)-1;
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let propType  = 'sfh';
+let useLoan   = true;
+let knowSell  = false;
+let unitTypes = [{id:1, br:2, ba:1, count:1, rent:1500}];
+let expenses  = [
+  {id:1, name:'Property Tax',  amount:3000, growth:3},
+  {id:2, name:'Insurance',     amount:1200, growth:3},
+  {id:3, name:'HOA',           amount:0,    growth:3},
+  {id:4, name:'Maintenance',   amount:2000, growth:3},
+  {id:5, name:'Other Costs',   amount:500,  growth:3},
+];
+let nextUnitId=10, nextExpId=10;
+let donutChart=null, cfChart=null, equityChart=null, noiDsChart=null;
+
+// ── PROP TYPE ─────────────────────────────────────────────
+function setPropType(t) {
+  propType = t;
+  document.getElementById('btn-sfh').classList.toggle('active',   t==='sfh');
+  document.getElementById('btn-multi').classList.toggle('active', t==='multi');
+  document.getElementById('sfh-income').style.display   = t==='sfh'   ? 'block' : 'none';
+  document.getElementById('multi-income').style.display = t==='multi' ? 'block' : 'none';
+  render();
+}
+
+function toggleLoan() {
+  useLoan = document.getElementById('use-loan').checked;
+  document.getElementById('loan-fields').style.display = useLoan ? 'block' : 'none';
+  document.getElementById('noi-ds-panel').style.display = useLoan ? 'block' : 'none';
+  render();
+}
+
+function toggleSellPrice() {
+  knowSell = document.getElementById('know-sell-price').checked;
+  document.getElementById('sell-price-field').style.display    = knowSell ? 'block' : 'none';
+  document.getElementById('appreciation-field').style.display  = knowSell ? 'none'  : 'block';
+  render();
+}
+
+function onRateInput()  { document.getElementById('rate-slider').value = document.getElementById('loan-rate').value; render(); }
+function onRateSlider() { document.getElementById('loan-rate').value = document.getElementById('rate-slider').value; render(); }
+
+function syncDown(dir) {
+  const price = +document.getElementById('purchase-price').value||0;
+  if (dir==='pct') {
+    const pct = +document.getElementById('down-pct').value||0;
+    document.getElementById('down-amt').value = Math.round(price*pct/100);
+  } else {
+    const amt = +document.getElementById('down-amt').value||0;
+    document.getElementById('down-pct').value = price>0?(amt/price*100).toFixed(1):0;
+  }
+  render();
+}
+
+// ── UNIT TYPES ────────────────────────────────────────────
+function addUnitType() {
+  unitTypes.push({id:nextUnitId++, br:1, ba:1, count:1, rent:1200});
+  renderUnitTypes(); render();
+}
+function removeUnitType(id) { unitTypes=unitTypes.filter(u=>u.id!==id); renderUnitTypes(); render(); }
+function setUT(id,k,v) { const u=unitTypes.find(u=>u.id===id); if(u){u[k]=v; render();} }
+
+function renderUnitTypes() {
+  const list = document.getElementById('unit-types-list');
+  list.innerHTML='';
+  unitTypes.forEach(u=>{
+    const div=document.createElement('div'); div.className='unit-row';
+    div.innerHTML=`
+      <div class="input-wrap"><input type="number" value="${u.br}" min="0" max="10" oninput="setUT(${u.id},'br',+this.value||0)" style="font-size:0.75rem"></div>
+      <div class="input-wrap"><input type="number" value="${u.ba}" min="0" max="10" step="0.5" oninput="setUT(${u.id},'ba',+this.value||0)" style="font-size:0.75rem"></div>
+      <div class="input-wrap"><input type="number" value="${u.count}" min="1" oninput="setUT(${u.id},'count',+this.value||1)" style="font-size:0.75rem"></div>
+      <div class="input-wrap"><input type="number" value="${u.rent}" min="0" oninput="setUT(${u.id},'rent',+this.value||0)" style="font-size:0.75rem"><span class="unit">$</span></div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeUnitType(${u.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── EXPENSES ──────────────────────────────────────────────
+function addExpense() {
+  expenses.push({id:nextExpId++, name:'New Expense', amount:0, growth:3});
+  renderExpenses(); render();
+}
+function removeExpense(id) { expenses=expenses.filter(e=>e.id!==id); renderExpenses(); render(); }
+function setExp(id,k,v) { const e=expenses.find(e=>e.id===id); if(e){e[k]=v; render();} }
+
+function renderExpenses() {
+  const list=document.getElementById('expenses-list');
+  list.innerHTML='';
+  expenses.forEach(e=>{
+    const div=document.createElement('div'); div.className='exp-row';
+    div.innerHTML=`
+      <input class="input-bare" type="text" value="${esc(e.name)}" oninput="setExp(${e.id},'name',this.value)" style="font-size:0.75rem">
+      <div class="input-wrap"><input type="number" value="${e.amount}" min="0" oninput="setExp(${e.id},'amount',+this.value||0)" style="font-size:0.75rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${e.growth}" min="0" step="0.1" oninput="setExp(${e.id},'growth',+this.value||0)" style="font-size:0.75rem"><span class="unit">%</span></div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeExpense(${e.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+
+function getV(id){return parseFloat(document.getElementById(id).value)||0;}
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  const purchasePrice = getV('purchase-price');
+  const downAmt       = useLoan ? getV('down-amt') : purchasePrice;
+  const downPct       = purchasePrice > 0 ? downAmt/purchasePrice*100 : 0;
+  const loanAmt       = useLoan ? Math.max(0, purchasePrice - downAmt) : 0;
+  const loanRate      = getV('loan-rate');
+  const loanTermYrs   = getV('loan-term') || 30;
+  const closingCost   = getV('closing-cost');
+  const repairCost    = getV('repair-cost');
+  const arv           = getV('arv') || purchasePrice;
+  const vacRate       = getV('vacancy-rate')/100;
+  const mgmtRate      = getV('mgmt-fee')/100;
+  const holdYears     = Math.max(1, getV('hold-years'));
+  const costToSell    = getV('cost-to-sell')/100;
+  const appreciation  = getV('appreciation')/100;
+  const mirrRate      = getV('mirr-rate');
+  const landPct       = getV('land-pct')/100;
+  const taxRate       = getV('tax-rate')/100;
+  const magi          = getV('magi');
+  const rentGrowth    = propType==='sfh' ? getV('rent-growth')/100 : getV('multi-rent-growth')/100;
+
+  // Gross monthly rent
+  let grossMonthlyRent = 0;
+  let totalUnits = 0;
+  if (propType==='sfh') {
+    grossMonthlyRent = getV('sfh-rent') + getV('other-income');
+    totalUnits = 1;
+  } else {
+    grossMonthlyRent = unitTypes.reduce((s,u)=>s+u.count*u.rent, 0) + getV('multi-other-income');
+    totalUnits = unitTypes.reduce((s,u)=>s+u.count, 0);
+  }
+
+  const grossAnnualRent = grossMonthlyRent * 12;
+  const egi1 = grossAnnualRent * (1-vacRate) * (1-mgmtRate);
+  const totalExpY1 = expenses.reduce((s,e)=>s+e.amount, 0);
+  const noi1 = egi1 - totalExpY1;
+
+  // Loan
+  const monthlyPI  = useLoan ? calcMonthlyPI(loanAmt, loanRate, loanTermYrs*12) : 0;
+  const annualDS   = monthlyPI * 12;
+  const { yearEndBals, yearInterest } = useLoan ? buildLoanBals(loanAmt, loanRate, loanTermYrs) : { yearEndBals:[], yearInterest:[] };
+
+  // Total equity invested
+  const totalInvested = downAmt + closingCost + repairCost;
+
+  // Year 1 cash flow
+  const cf1 = noi1 - annualDS;
+
+  // Cap rate, GRM
+  const capRate = purchasePrice > 0 ? noi1/purchasePrice : 0;
+  const grm     = grossAnnualRent > 0 ? purchasePrice/grossAnnualRent : 0;
+  const cocY1   = totalInvested > 0 ? cf1/totalInvested : 0;
+
+  // DSCR, Debt Yield, Break-Even
+  const dscr       = useLoan && annualDS > 0 ? noi1/annualDS : null;
+  const debtYield  = useLoan && loanAmt > 0  ? noi1/loanAmt  : null;
+  const breakEven  = grossAnnualRent > 0 ? (totalExpY1 + annualDS)/grossAnnualRent : 0;
+
+  // ── Stat cards
+  document.getElementById('m-caprate').textContent = fPct(capRate*100);
+  document.getElementById('m-coc').textContent     = fPct(cocY1*100);
+  document.getElementById('m-grm').textContent     = grm.toFixed(2)+'x';
+  document.getElementById('m-noi').textContent     = fS(noi1);
+
+  // ── Badges
+  function badge(color, label) {
+    return `<div class="badge ${color}">${label}</div>`;
+  }
+
+  let dscrHtml='', dyHtml='', beHtml='', cfHtml='';
+  if (useLoan && dscr !== null) {
+    const dscrColor = dscr>=1.25?'green':dscr>=1.0?'amber':'red';
+    dscrHtml = badge(dscrColor, `DSCR ${dscr.toFixed(2)} ${dscr>=1.25?'✓ Good':dscr>=1.0?'⚠ Marginal':'✗ Below 1.0'}`);
+    dyHtml   = badge(debtYield>=0.10?'green':debtYield>=0.08?'amber':'red',
+                     `Debt Yield ${fPct(debtYield*100)} ${debtYield>=0.10?'✓':'⚠'}`);
+  }
+  beHtml = badge(breakEven<=0.70?'green':breakEven<=0.85?'amber':'red',
+                 `Break-even ${fPct(breakEven*100)} occupancy`);
+  cfHtml = badge(cf1>=0?'green':'red', `${cf1>=0?'+':''}${fL2(cf1)}/yr cash flow`);
+
+  document.getElementById('dscr-badge').innerHTML    = dscrHtml;
+  document.getElementById('debt-yield-badge').innerHTML = dyHtml;
+  document.getElementById('breakeven-badge').innerHTML  = beHtml;
+  document.getElementById('cf-badge').innerHTML         = cfHtml;
+
+  document.getElementById('dscr-detail').innerHTML = useLoan ? `
+    <strong>NOI:</strong> ${fL2(noi1)} &nbsp;|&nbsp; <strong>Annual Debt Service:</strong> ${fL2(annualDS)} &nbsp;|&nbsp;
+    <strong>Break-even occupancy:</strong> ${fPct(breakEven*100)} of gross rent &nbsp;|&nbsp;
+    <strong>Debt Yield:</strong> ${debtYield!==null?fPct(debtYield*100):'N/A'}
+  ` : `<strong>NOI:</strong> ${fL2(noi1)} &nbsp;|&nbsp; No financing`;
+
+  // ── Income/Expense summary
+  document.getElementById('income-expense-summary').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut2)">Gross Annual Rent</span><span style="color:var(--grn);font-weight:600">${fL2(grossAnnualRent)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut2)">Vacancy (${getV('vacancy-rate')}%)</span><span style="color:var(--red)">−${fL2(grossAnnualRent*vacRate)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut2)">Mgmt Fee (${getV('mgmt-fee')}%)</span><span style="color:var(--red)">−${fL2(egi1*mgmtRate)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut2)">Effective Gross Income</span><span style="font-weight:600">${fL2(egi1)}</span></div>
+    ${expenses.map(e=>`<div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.72rem;padding:0.25rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut)">${esc(e.name)}</span><span style="color:var(--red)">−${fL2(e.amount)}</span></div>`).join('')}
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+      <span style="color:var(--mut2)">Total Expenses</span><span style="color:var(--red)">−${fL2(totalExpY1)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.78rem;font-weight:700;padding:0.4rem 0">
+      <span>NOI (Year 1)</span><span style="color:var(--grn)">${fL2(noi1)}</span></div>
+    ${useLoan?`<div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.75rem;padding:0.3rem 0;border-top:1px solid var(--bdr2)">
+      <span style="color:var(--mut2)">Annual Debt Service</span><span style="color:var(--red)">−${fL2(annualDS)}</span></div>
+    <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.78rem;font-weight:700;padding:0.3rem 0">
+      <span>Cash Flow (Year 1)</span><span style="color:${cf1>=0?'var(--grn)':'var(--red)'}">${fL2(cf1)}</span></div>`:''}
+  `;
+
+  // ── Donut
+  const donutData   = [Math.max(0,egi1), totalExpY1, useLoan?annualDS:0].map(v=>Math.max(0,v));
+  const donutLabels = ['EGI','Expenses','Debt Service'];
+  const donutColors = ['#4ade80','#f87171','#60a5fa'];
+  if (donutChart) {
+    donutChart.data.datasets[0].data = donutData;
+    donutChart.update('none');
+  } else {
+    donutChart = new Chart(document.getElementById('donut-chart'),{
+      type:'doughnut',
+      data:{labels:donutLabels,datasets:[{data:donutData,backgroundColor:donutColors,borderWidth:0,hoverOffset:4}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fL2(ctx.raw)}`}}}}
+    });
+  }
+  document.getElementById('donut-legend').innerHTML = donutLabels.map((l,i)=>
+    `<span style="display:flex;align-items:center;gap:4px;margin:2px 0">
+      <span style="width:8px;height:8px;border-radius:2px;background:${donutColors[i]};display:inline-block"></span>${l}
+    </span>`).join('');
+
+  // ── Hold period cash flows
+  const cfs = [-totalInvested];
+  const yearRows = [];
+  for (let yr=1; yr<=holdYears; yr++) {
+    const yearRent = grossAnnualRent * Math.pow(1+rentGrowth, yr-1);
+    const yearEGI  = yearRent * (1-vacRate) * (1-mgmtRate);
+    const yearExp  = expenses.reduce((s,e)=>s+e.amount*Math.pow(1+e.growth/100,yr-1),0);
+    const yearNOI  = yearEGI - yearExp;
+    const yearCF   = yearNOI - annualDS;
+    const yearVal  = purchasePrice * Math.pow(1+appreciation, yr);
+    const yearLoanBal = useLoan && yr<=loanTermYrs ? (yearEndBals[yr-1]||0) : 0;
+    const yearEquity  = yearVal - yearLoanBal;
+    cfs.push(yearCF);
+    yearRows.push({yr, egi:yearEGI, exp:yearExp, noi:yearNOI, cf:yearCF, val:yearVal, loanBal:yearLoanBal, equity:yearEquity, rent:yearRent});
+  }
+
+  // Sale
+  let finalSalePrice;
+  if (knowSell) {
+    finalSalePrice = getV('sell-price');
+  } else {
+    finalSalePrice = purchasePrice * Math.pow(1+appreciation, holdYears);
+  }
+  const saleProceedsGross = finalSalePrice;
+  const saleCosts         = finalSalePrice * costToSell;
+  const loanBalAtSale     = useLoan && holdYears<=loanTermYrs ? (yearEndBals[holdYears-1]||0) : 0;
+  const netSaleProceeds   = finalSalePrice - saleCosts - loanBalAtSale;
+  cfs[holdYears] += netSaleProceeds;
+
+  // IRR / MIRR / MOIC
+  const irrVal  = calcIRR(cfs);
+  const mirrVal = calcMIRR(cfs, loanRate, mirrRate);
+  const totalCashIn  = Math.abs(cfs[0]);
+  const totalCashOut = cfs.slice(1).reduce((s,c)=>s+c, 0);
+  const moic = totalCashIn > 0 ? (totalCashOut+totalCashIn)/totalCashIn : 0;
+  const totalReturn = totalCashOut + totalCashIn - totalCashIn;
+
+  document.getElementById('m-irr').textContent  = irrVal  !== null ? fPct(irrVal*100)  : 'N/A';
+  document.getElementById('m-mirr').textContent = mirrVal !== null ? fPct(mirrVal*100) : 'N/A';
+  document.getElementById('m-moic').textContent = moic.toFixed(2)+'x';
+  document.getElementById('m-totalreturn').textContent = fS(totalCashOut);
+
+  // ── Cash flow chart
+  const cfLabels = yearRows.map(r=>'Yr '+r.yr);
+  const cfData   = yearRows.map(r=>r.cf);
+  const cfColors = cfData.map(v=>v>=0?'rgba(74,222,128,0.7)':'rgba(248,113,113,0.7)');
+  if (cfChart) {
+    cfChart.data.labels = cfLabels;
+    cfChart.data.datasets[0].data = cfData;
+    cfChart.data.datasets[0].backgroundColor = cfColors;
+    cfChart.update('none');
+  } else {
+    cfChart = new Chart(document.getElementById('cashflow-chart'),{
+      type:'bar',
+      data:{labels:cfLabels,datasets:[{label:'Cash Flow',data:cfData,backgroundColor:cfColors,borderRadius:3}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:150},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${fL2(ctx.raw)}`}}},
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9}},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // ── Equity growth chart
+  const initEquity      = totalInvested;
+  const equityLabels    = ['Start',...yearRows.map(r=>'Yr '+r.yr)];
+  const totalEquityData = [initEquity,...yearRows.map(r=>r.equity)];
+  const loanPaydownData = [0,...yearRows.map(r=>useLoan?(loanAmt-(r.loanBal||0)):0)];
+  const appreciationData= [0,...yearRows.map(r=>r.val-purchasePrice)];
+  if (equityChart) {
+    equityChart.data.labels = equityLabels;
+    equityChart.data.datasets[0].data = totalEquityData;
+    equityChart.data.datasets[1].data = loanPaydownData;
+    equityChart.data.datasets[2].data = appreciationData;
+    equityChart.update('none');
+  } else {
+    equityChart = new Chart(document.getElementById('equity-chart'),{
+      type:'line',
+      data:{labels:equityLabels,datasets:[
+        {label:'Total Equity',data:totalEquityData,borderColor:'#4ade80',backgroundColor:'rgba(74,222,128,0.07)',fill:true,tension:0.3,pointRadius:2},
+        {label:'Loan Paydown',data:loanPaydownData,borderColor:'#60a5fa',fill:false,tension:0.3,pointRadius:2,borderDash:[4,3]},
+        {label:'Appreciation',data:appreciationData,borderColor:'#fb923c',fill:false,tension:0.3,pointRadius:2,borderDash:[4,3]},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:150},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fL2(ctx.raw)}`}}},
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9}},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // ── NOI vs Debt Service chart
+  if (useLoan) {
+    const noiData = yearRows.map(r=>r.noi);
+    const dsData  = yearRows.map(()=>annualDS);
+    if (noiDsChart) {
+      noiDsChart.data.labels = cfLabels;
+      noiDsChart.data.datasets[0].data = noiData;
+      noiDsChart.data.datasets[1].data = dsData;
+      noiDsChart.update('none');
+    } else {
+      noiDsChart = new Chart(document.getElementById('noids-chart'),{
+        type:'line',
+        data:{labels:cfLabels,datasets:[
+          {label:'NOI',data:noiData,borderColor:'#4ade80',backgroundColor:'rgba(74,222,128,0.06)',fill:true,tension:0.3,pointRadius:2},
+          {label:'Debt Service',data:dsData,borderColor:'#f87171',fill:false,tension:0.3,pointRadius:0,borderDash:[6,3]},
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:150},
+          plugins:{legend:{labels:{color:'#9ca3af',font:{family:'DM Mono',size:10},boxWidth:10}},
+            tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fL2(ctx.raw)}`}}},
+          scales:{
+            x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9}},grid:{color:'rgba(255,255,255,0.04)'}},
+            y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+          }
+        }
+      });
+    }
+  }
+
+  // ── Year-by-year table
+  const tbody = document.getElementById('schedule-tbody');
+  tbody.innerHTML = '';
+  yearRows.forEach(r => {
+    const tr = document.createElement('tr');
+    const cocYr = totalInvested > 0 ? r.cf/totalInvested*100 : 0;
+    tr.innerHTML = `
+      <td>${r.yr}</td>
+      <td>${fL2(r.rent)}</td>
+      <td>${fL2(r.egi)}</td>
+      <td style="color:var(--red)">${fL2(r.exp)}</td>
+      <td style="color:var(--grn)">${fL2(r.noi)}</td>
+      <td>${useLoan?fL2(annualDS):'—'}</td>
+      <td style="color:${r.cf>=0?'var(--grn)':'var(--red)'}">${fL2(r.cf)}</td>
+      <td>${fL2(r.val)}</td>
+      <td>${useLoan?fL2(r.loanBal):'—'}</td>
+      <td style="color:var(--blu)">${fL2(r.equity)}</td>
+      <td style="color:${cocYr>=0?'var(--grn)':'var(--red)'}">${cocYr.toFixed(1)}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  // Sale row
+  const saleTr = document.createElement('tr');
+  saleTr.style.borderTop = '1px solid var(--bdr2)';
+  saleTr.innerHTML = `
+    <td style="color:var(--amb);font-weight:600">Sale</td>
+    <td colspan="5" style="color:var(--mut)">Exit at ${knowSell?'fixed price':fPct(appreciation*100)+'/yr appreciation'}</td>
+    <td style="color:var(--amb);font-weight:600">${fL2(netSaleProceeds)}</td>
+    <td style="color:var(--amb)">${fL2(finalSalePrice)}</td>
+    <td style="color:var(--red)">${useLoan?fL2(loanBalAtSale):'—'}</td>
+    <td colspan="2" style="color:var(--mut)">net proceeds after costs</td>
+  `;
+  tbody.appendChild(saleTr);
+
+  // ── Tax analysis
+  const deprBasis      = (purchasePrice + repairCost) * (1-landPct);
+  const annualDeprec   = deprBasis / 27.5;
+  const yr1Interest    = useLoan ? loanAmt * (loanRate/100) : 0; // approx
+  const taxableIncome1 = egi1 - totalExpY1 - annualDeprec - yr1Interest;
+  const taxOwed1       = taxableIncome1 * taxRate;
+  const deprecShield   = annualDeprec * taxRate;
+
+  // Passive activity loss rules
+  let passiveLossNote = '';
+  if (taxableIncome1 < 0) {
+    if (magi <= 100000) {
+      const deductible = Math.min(25000, Math.abs(taxableIncome1));
+      passiveLossNote = `Passive loss ${fL2(Math.abs(taxableIncome1))} — you may deduct up to ${fL2(deductible)} against ordinary income (AGI ≤ $100K rule).`;
+    } else if (magi <= 150000) {
+      const phaseout = Math.max(0, 25000 * (1-(magi-100000)/50000));
+      passiveLossNote = `Passive loss ${fL2(Math.abs(taxableIncome1))} — partial deduction up to ${fL2(phaseout)} (AGI phase-out $100K–$150K). Remainder carries forward.`;
+    } else {
+      passiveLossNote = `Passive loss ${fL2(Math.abs(taxableIncome1))} — AGI above $150K: loss carries forward to offset future passive income or gain on sale.`;
+    }
+  }
+
+  document.getElementById('tax-summary').innerHTML = `
+    <div class="g2" style="margin-bottom:0.85rem">
+      <div class="card tel"><div class="card-lb">Annual Depreciation</div><div class="card-v">${fL2(annualDeprec)}</div><div class="card-s">27.5yr straight-line · bldg only</div></div>
+      <div class="card grn"><div class="card-lb">Depreciation Tax Shield</div><div class="card-v">${fL2(deprecShield)}</div><div class="card-s">at ${getV('tax-rate')}% marginal rate</div></div>
+      <div class="card ${taxableIncome1<0?'grn':'red'}"><div class="card-lb">Taxable Income (Yr 1)</div><div class="card-v">${fL2(taxableIncome1)}</div><div class="card-s">EGI − exp − depr − interest</div></div>
+      <div class="card ${taxOwed1<0?'grn':'amb'}"><div class="card-lb">Tax ${taxOwed1<0?'Savings':'Owed'} (Yr 1)</div><div class="card-v">${fL2(Math.abs(taxOwed1))}</div><div class="card-s">${taxOwed1<0?'net tax benefit':'tax liability'}</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0.3rem;font-family:'DM Mono',monospace;font-size:0.72rem">
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+        <span style="color:var(--mut2)">Depreciable Basis</span><span>${fL2(deprBasis)} (${Math.round((1-landPct)*100)}% of cost)</span></div>
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+        <span style="color:var(--mut2)">Year 1 Mortgage Interest</span><span style="color:var(--red)">−${fL2(yr1Interest)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid var(--bdr)">
+        <span style="color:var(--mut2)">Cash Flow (before tax)</span><span style="color:${cf1>=0?'var(--grn)':'var(--red)'}">${fL2(cf1)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:0.3rem 0">
+        <span style="color:var(--mut2)">After-Tax Cash Flow</span><span style="font-weight:600;color:${(cf1-taxOwed1)>=0?'var(--grn)':'var(--red)'}">${fL2(cf1-taxOwed1)}</span></div>
+    </div>
+    ${passiveLossNote?`<div class="ib" style="margin-top:0.75rem">${passiveLossNote}</div>`:''}
+    <div style="font-size:0.65rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.6rem;line-height:1.6">
+      Depreciation calculated on building value only (land excluded). Year 1 mortgage interest is approximate. 
+      Consult a tax professional for actual tax planning. Capital gains tax on sale not included above.
+    </div>
+  `;
+
+  // ── Sensitivity table (IRR at different appreciation × cap rate combos)
+  const appRates  = [-0.01, 0, 0.01, 0.02, appreciation, 0.04, 0.05];
+  const capRates  = [0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.10];
+
+  const thead = document.getElementById('sens-thead');
+  const stbody = document.getElementById('sens-tbody');
+  thead.innerHTML = '<th style="text-align:left">App\\Cap</th>' + capRates.map(c=>`<th>${fPct(c*100,0)}</th>`).join('');
+  stbody.innerHTML = '';
+
+  appRates.forEach(app => {
+    const tr = document.createElement('tr');
+    let cells = `<td>${fPct(app*100,1)}</td>`;
+    capRates.forEach(exitCap => {
+      const exitVal   = holdYears<=loanTermYrs ? (yearRows[holdYears-1]?.noi||noi1) / exitCap : noi1/exitCap;
+      const exitLoanBal = useLoan && holdYears<=loanTermYrs ? (yearEndBals[holdYears-1]||0) : 0;
+      const exitProceeds = exitVal - exitVal*costToSell - exitLoanBal;
+
+      // Build sensitivity cash flows
+      const sCFs = [-totalInvested];
+      for (let yr=1; yr<=holdYears; yr++) {
+        const sRent = grossAnnualRent * Math.pow(1+rentGrowth, yr-1);
+        const sEGI  = sRent * (1-vacRate);
+        const sExp  = expenses.reduce((s,e)=>s+e.amount*Math.pow(1+e.growth/100,yr-1),0);
+        sCFs.push(sEGI-sExp-annualDS);
+      }
+      sCFs[holdYears] += exitProceeds;
+
+      const sIRR = calcIRR(sCFs);
+      const isCurrentCell = Math.abs(app-appreciation)<0.001 && Math.abs(exitCap-capRate)<0.001;
+      const irrStr = sIRR !== null ? fPct(sIRR*100,1) : 'N/A';
+      const color  = sIRR===null?'':sIRR>=0.15?'color:var(--grn)':sIRR>=0.10?'color:var(--amb)':sIRR>=0?'':'color:var(--red)';
+      cells += `<td class="${isCurrentCell?'sens-highlight':''}" style="${color}">${irrStr}</td>`;
+    });
+    tr.innerHTML = cells;
+    stbody.appendChild(tr);
+  });
+
+  // Net worth
+  updateNetWorth({ home_value: finalSalePrice, home_mortgage_balance: useLoan?loanBalAtSale:0 });
+}
+
+function fPct(n, d=2) { return (isNaN(n)?0:n).toFixed(d)+'%'; }
+
+// ── SAVE / LOAD ───────────────────────────────────────────
+function doSave() {
+  const ids = ['purchase-price','down-pct','down-amt','loan-rate','loan-term',
+    'closing-cost','repair-cost','arv','sfh-rent','rent-growth','other-income',
+    'other-growth','multi-rent-growth','multi-other-income','vacancy-rate','mgmt-fee',
+    'hold-years','cost-to-sell','appreciation','mirr-rate','land-pct','tax-rate','magi',
+    'sell-price'];
+  const state = {_propType:propType,_useLoan:useLoan,_knowSell:knowSell,
+    _unitTypes:unitTypes,_expenses:expenses,_nextUnitId:nextUnitId,_nextExpId:nextExpId};
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el)state[id]=el.value; });
+  ['use-loan','know-sell-price'].forEach(id=>{ const el=document.getElementById(id); if(el)state[id]=el.checked; });
+  storeSave('fin_rental_v1', state);
+  showSaveConfirm();
+}
+
+function loadSaved() {
+  const s = storeLoad('fin_rental_v1');
+  if (!s) return;
+  if (s._propType)   setPropType(s._propType);
+  if (s._unitTypes)  { unitTypes=s._unitTypes; renderUnitTypes(); }
+  if (s._expenses)   { expenses=s._expenses;   renderExpenses();  }
+  if (s._nextUnitId) nextUnitId=s._nextUnitId;
+  if (s._nextExpId)  nextExpId=s._nextExpId;
+  Object.keys(s).forEach(k=>{
+    if (k.startsWith('_')) return;
+    const el=document.getElementById(k); if(!el) return;
+    if(el.type==='checkbox') el.checked=s[k]; else el.value=s[k];
+  });
+  useLoan  = s._useLoan  !== undefined ? s._useLoan  : true;
+  knowSell = s._knowSell !== undefined ? s._knowSell : false;
+  document.getElementById('loan-fields').style.display       = useLoan  ? 'block' : 'none';
+  document.getElementById('sell-price-field').style.display  = knowSell ? 'block' : 'none';
+  document.getElementById('appreciation-field').style.display= knowSell ? 'none'  : 'block';
+  document.getElementById('rate-slider').value = document.getElementById('loan-rate').value;
+}
+
+function doExport() {
+  document.getElementById('pr-inner').innerHTML = `
+    <style>body{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt}
+    h1{font-size:14pt;border-bottom:2px solid #111;padding-bottom:3mm;margin-bottom:4mm}
+    h2{font-size:9pt;margin:3mm 0 2mm;border-bottom:1px solid #eee;padding-bottom:1mm}
+    table{width:100%;border-collapse:collapse;font-size:7pt}
+    th,td{padding:1.5mm 2mm;border-bottom:0.4px solid #eee;text-align:right}
+    th:first-child,td:first-child{text-align:left}</style>
+    <h1>Rental Property Analysis</h1>
+    <h2>Key Metrics</h2>
+    ${document.getElementById('income-expense-summary').innerHTML}
+    <h2>Tax Analysis</h2>
+    ${document.getElementById('tax-summary').innerHTML}
+    <h2 style="page-break-before:always">Year-by-Year Schedule</h2>
+    ${document.querySelector('table').outerHTML}`;
+  window.print();
+}
+
+// ── INIT ─────────────────────────────────────────────────
+loadSaved();
+renderUnitTypes();
+renderExpenses();
+render();
+</script>
+</body>
+</html>

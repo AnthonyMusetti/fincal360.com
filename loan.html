@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loan Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:320px 1fr;gap:1.25rem;align-items:start}
+@media(max-width:960px){.layout{grid-template-columns:1fr}}
+.controls{position:sticky;top:5rem}
+.right{display:flex;flex-direction:column;gap:1.25rem}
+.srow{display:flex;justify-content:space-between;align-items:baseline;padding:0.42rem 0;border-bottom:1px solid var(--bdr)}
+.srow:last-child{border-bottom:none}
+.srow-lbl{font-size:0.78rem;font-family:'DM Mono',monospace;color:var(--mut2)}
+.srow-val{font-size:0.85rem;font-weight:600;font-family:'DM Mono',monospace}
+.term-toggle{display:flex;gap:0;border:1px solid var(--bdr);border-radius:6px;overflow:hidden;width:fit-content}
+.term-btn{padding:0.35rem 0.7rem;font-family:'DM Mono',monospace;font-size:0.7rem;background:var(--surf2);color:var(--mut2);border:none;cursor:pointer;transition:all 0.15s}
+.term-btn.active{background:rgba(74,222,128,0.1);color:var(--grn)}
+.expand-btn{background:none;border:none;color:var(--mut);cursor:pointer;font-family:'DM Mono',monospace;font-size:0.75rem;width:20px;text-align:center;padding:0;line-height:1}
+.expand-btn:hover{color:var(--grn)}
+.month-group{display:none}
+.month-group.open{display:table-row-group}
+.month-group tr td{font-size:0.65rem;color:var(--mut)!important;padding:0.22rem 0.5rem;background:rgba(255,255,255,0.012)}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .right{position:static !important}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('loan')</script>
+
+<div class="page">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Loan Calculator</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">payment · amortization · total cost · extra payments</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="controls">
+      <div class="panel">
+        <div class="sect-title">Loan Details</div>
+        <div style="display:flex;flex-direction:column;gap:0.75rem">
+
+          <div class="field"><label>Loan Amount ($)</label>
+            <div class="input-wrap"><input type="number" id="loan-amount" value="10000" min="0" oninput="render()"><span class="unit">$</span></div>
+          </div>
+
+          <div class="field">
+            <label>Loan Term</label>
+            <div style="display:flex;gap:0.5rem;align-items:center">
+              <div class="input-wrap" style="flex:1"><input type="number" id="loan-term" value="5" min="1" oninput="render()"></div>
+              <div class="term-toggle">
+                <button class="term-btn" id="btn-months" onclick="setTermUnit('months')">Months</button>
+                <button class="term-btn active" id="btn-years" onclick="setTermUnit('years')">Years</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Interest Rate (%)</label>
+            <div class="input-wrap"><input type="number" id="interest-rate" value="10" min="0" max="50" step="0.1" oninput="onRateInput()"><span class="unit">%</span></div>
+            <input type="range" id="rate-slider" min="1" max="30" step="0.25" value="10" oninput="onRateSlider()" style="margin-top:0.4rem">
+          </div>
+
+          <div class="field"><label>Origination Fee (%)</label>
+            <div class="input-wrap"><input type="number" id="orig-fee" value="0" min="0" max="10" step="0.1" oninput="render()"><span class="unit">%</span></div>
+          </div>
+
+          <div class="field"><label>Other Fees ($)</label>
+            <div class="input-wrap"><input type="number" id="other-fees" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+          </div>
+
+          <div class="field"><label>Start Date</label>
+            <input type="date" id="start-date" class="input-bare" oninput="render()">
+          </div>
+        </div>
+
+        <!-- EXTRA PAYMENTS -->
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--bdr)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+            <div style="font-size:0.7rem;font-family:'DM Mono',monospace;color:var(--mut2)">Extra Payments <span style="color:var(--mut)">(optional)</span></div>
+            <button class="btn" onclick="addExtra()" style="padding:0.25rem 0.5rem;font-size:0.62rem">+ Add</button>
+          </div>
+          <div id="extra-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <!-- HERO -->
+      <div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:12px;padding:1.25rem 1.5rem">
+        <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut2);margin-bottom:0.25rem">Estimated Monthly Payment</div>
+        <div style="font-size:2.4rem;font-weight:700;letter-spacing:-0.03em;color:var(--grn)" id="hero-payment">—</div>
+        <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.25rem" id="hero-sub"></div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div class="g4">
+        <div class="card blu"><div class="card-lb">Total Loan Amount</div><div class="card-v" id="st-loan">—</div></div>
+        <div class="card red"><div class="card-lb">Total Interest Paid</div><div class="card-v" id="st-interest">—</div></div>
+        <div class="card amb"><div class="card-lb">Total Cost of Loan</div><div class="card-v" id="st-total">—</div></div>
+        <div class="card tel"><div class="card-lb">Effective Rate</div><div class="card-v" id="st-apr">—</div></div>
+      </div>
+
+      <!-- BREAKDOWN + CHART -->
+      <div class="g2">
+        <div class="panel">
+          <div class="sect-title">Loan Summary</div>
+          <div id="loan-summary"></div>
+        </div>
+        <div class="panel" style="display:flex;align-items:center;justify-content:center">
+          <div style="position:relative;width:200px;height:200px">
+            <canvas id="donut-chart" role="img" aria-label="Loan breakdown donut"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- LINE CHART -->
+      <div class="panel">
+        <div class="sect-title">Amortization Overview</div>
+        <div style="position:relative;width:100%;height:240px">
+          <canvas id="amort-chart" role="img" aria-label="Amortization line chart"></canvas>
+        </div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.75rem;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:3px;background:#60a5fa;display:inline-block"></span>Balance</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:3px;background:#4ade80;display:inline-block"></span>Cumulative Interest</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:3px;background:#ef4444;display:inline-block"></span>Payment</span>
+        </div>
+      </div>
+
+      <!-- AMORTIZATION TABLE -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;flex-wrap:wrap;gap:0.5rem">
+          <div class="sect-title" style="margin:0">Amortization Schedule <span id="sched-dates" style="font-weight:400;color:var(--mut);font-size:0.7rem"></span></div>
+          <div style="display:flex;gap:0.4rem">
+            <button class="btn grn" id="vb-annual"  onclick="setView('annual')"  style="padding:0.3rem 0.7rem;font-size:0.68rem">Annual</button>
+            <button class="btn"     id="vb-monthly" onclick="setView('monthly')" style="padding:0.3rem 0.7rem;font-size:0.68rem">Monthly</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="amort-table">
+            <thead>
+              <tr>
+                <th style="text-align:left" id="period-th">Year</th>
+                <th>Your Payment</th>
+                <th>Principal Paid</th>
+                <th>Interest Paid</th>
+                <th>Total Interest</th>
+                <th>Balance</th>
+              </tr>
+            </thead>
+            <tbody id="amort-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// Math verified: $10k/10%/5yr = $212.47/mo, total $12,748.23, interest $2,748.23
+function calcPayment(principal, annualRate, months) {
+  if (principal <= 0) return 0;
+  if (annualRate === 0) return principal/months;
+  const r = annualRate/100/12;
+  return principal * (r*Math.pow(1+r,months)) / (Math.pow(1+r,months)-1);
+}
+
+let termUnit   = 'years';
+let viewMode   = 'annual';
+let extrasList = [];
+let nextExtraId = 1;
+let donutChart = null, amortChart = null;
+
+function setTermUnit(u) {
+  termUnit = u;
+  document.getElementById('btn-months').classList.toggle('active', u==='months');
+  document.getElementById('btn-years').classList.toggle('active',  u==='years');
+  render();
+}
+
+function setView(v) {
+  viewMode = v;
+  document.getElementById('vb-annual').classList.toggle('grn',    v==='annual');
+  document.getElementById('vb-monthly').classList.toggle('grn',   v==='monthly');
+  document.getElementById('period-th').textContent = v==='annual'?'Year':'Month';
+  render();
+}
+
+function onRateInput()  { document.getElementById('rate-slider').value=document.getElementById('interest-rate').value; render(); }
+function onRateSlider() { document.getElementById('interest-rate').value=document.getElementById('rate-slider').value; render(); }
+function getV(id)       { return parseFloat(document.getElementById(id).value)||0; }
+
+// Extra payments
+function addExtra() {
+  extrasList.push({id:nextExtraId++, amount:0, type:'monthly'});
+  renderExtras(); render();
+}
+function removeExtra(id) { extrasList=extrasList.filter(e=>e.id!==id); renderExtras(); render(); }
+function setExtra(id,k,v){ const e=extrasList.find(e=>e.id===id); if(e){e[k]=v;render();} }
+
+function renderExtras() {
+  const list=document.getElementById('extra-list'); list.innerHTML='';
+  extrasList.forEach(ep=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:grid;grid-template-columns:1fr 100px auto;gap:0.4rem;align-items:center;margin-bottom:0.4rem';
+    div.innerHTML=`
+      <div class="input-wrap"><input type="number" value="${ep.amount}" min="0" oninput="setExtra(${ep.id},'amount',+this.value||0)"><span class="unit">$</span></div>
+      <select class="input-bare" onchange="setExtra(${ep.id},'type',this.value)" style="font-size:0.72rem">
+        <option value="monthly" ${ep.type==='monthly'?'selected':''}>Monthly</option>
+        <option value="yearly"  ${ep.type==='yearly'?'selected':''}>Yearly</option>
+      </select>
+      <button class="btn red" style="padding:0.3rem 0.45rem" onclick="removeExtra(${ep.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function render() {
+  const principal  = getV('loan-amount');
+  const termVal    = getV('loan-term');
+  const months     = termUnit==='years' ? termVal*12 : termVal;
+  const rate       = getV('interest-rate');
+  const origFeePct = getV('orig-fee');
+  const otherFees  = getV('other-fees');
+  const startDateStr = document.getElementById('start-date').value || new Date().toISOString().split('T')[0];
+
+  if (principal<=0 || months<=0) return;
+
+  const basePayment  = calcPayment(principal, rate, months);
+  const origFeeAmt   = principal * origFeePct/100;
+  const totalFees    = origFeeAmt + otherFees;
+  const monthlyExtra = extrasList.filter(e=>e.type==='monthly').reduce((s,e)=>s+e.amount,0);
+
+  // Build amortization
+  const r = rate/100/12;
+  let balance = principal;
+  let cumInt  = 0;
+  const rows  = [];
+  const date  = new Date(startDateStr+'T12:00:00');
+
+  for (let m=0; m<months*2 && balance>0.005; m++) {
+    const int  = balance*r;
+    let extra  = extrasList.reduce((s,ep)=>{
+      if(ep.type==='monthly') return s+ep.amount;
+      if(ep.type==='yearly' && date.getMonth()===0) return s+ep.amount;
+      return s;
+    },0);
+    let prin   = basePayment-int+extra;
+    if(prin>balance) prin=balance;
+    balance    = Math.max(0, balance-prin);
+    cumInt    += int;
+    rows.push({month:m+1, year:date.getFullYear(), date:new Date(date),
+      payment:int+prin, principal:prin, interest:int, cumInt, balance});
+    date.setMonth(date.getMonth()+1);
+    if(balance<0.005) break;
+  }
+
+  const totalPaid     = rows.reduce((s,r)=>s+r.payment,0) + totalFees;
+  const totalInterest = rows.reduce((s,r)=>s+r.interest,0);
+  const actualMonths  = rows.length;
+
+  // Effective APR (Newton's method on net proceeds)
+  const netProceeds = principal - totalFees;
+  let apr = rate/100/12;
+  for(let i=0;i<100;i++){
+    const pv = rows.reduce((s,r,t)=>s+r.payment/Math.pow(1+apr,t+1),0);
+    const dpv = rows.reduce((s,r,t)=>s-(t+1)*r.payment/Math.pow(1+apr,t+2),0);
+    const na = apr-(pv-netProceeds)/dpv;
+    if(Math.abs(na-apr)<1e-10) break;
+    apr=na;
+  }
+  const effectiveAPR = apr*12*100;
+
+  // Stat cards
+  document.getElementById('hero-payment').textContent = fL2(basePayment);
+  document.getElementById('hero-sub').textContent =
+    `${actualMonths} payments of ${fL2(basePayment)}${monthlyExtra>0?' + '+fL2(monthlyExtra)+' extra':''}` +
+    (rows.length<months ? ` · payoff ${rows[rows.length-1].date.toLocaleDateString('en-US',{month:'short',year:'numeric'})}` : '');
+  document.getElementById('st-loan').textContent     = fL2(principal);
+  document.getElementById('st-interest').textContent = fL2(totalInterest);
+  document.getElementById('st-total').textContent    = fL2(totalPaid);
+  document.getElementById('st-apr').textContent      = effectiveAPR.toFixed(2)+'%';
+
+  // Summary
+  document.getElementById('loan-summary').innerHTML = `
+    <div class="srow"><span class="srow-lbl">Loan Amount</span><span class="srow-val">${fL2(principal)}</span></div>
+    <div class="srow"><span class="srow-lbl">Origination Fee (${origFeePct}%)</span><span class="srow-val">${fL2(origFeeAmt)}</span></div>
+    <div class="srow"><span class="srow-lbl">Other Fees</span><span class="srow-val">${fL2(otherFees)}</span></div>
+    <div class="srow"><span class="srow-lbl">Total of ${actualMonths} Payments</span><span class="srow-val">${fL2(totalPaid-totalFees)}</span></div>
+    <div class="srow"><span class="srow-lbl">Total Interest Paid</span><span class="srow-val" style="color:var(--red)">${fL2(totalInterest)}</span></div>
+    <div class="srow"><span class="srow-lbl" style="color:var(--txt);font-weight:600">Total Cost of Loan</span><span class="srow-val" style="font-size:1rem;color:var(--grn)">${fL2(totalPaid)}</span></div>
+    ${rows.length<months?`<div class="srow"><span class="srow-lbl" style="color:var(--tel)">Early Payoff</span><span class="srow-val" style="color:var(--tel)">${months-rows.length} mo saved</span></div>`:''}
+  `;
+
+  // Donut
+  const donutData = [principal, totalInterest, totalFees].map(v=>Math.max(0,v));
+  if(donutChart){donutChart.data.datasets[0].data=donutData;donutChart.update('none');}
+  else donutChart=new Chart(document.getElementById('donut-chart'),{
+    type:'doughnut',
+    data:{labels:['Principal','Interest','Fees'],datasets:[{data:donutData,backgroundColor:['#60a5fa','#4ade80','#f59e0b'],borderWidth:0,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'bottom',labels:{color:'#9ca3af',font:{family:'DM Mono',size:10},padding:8,boxWidth:10}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fL2(ctx.raw)}`}}}}
+  });
+
+  // Line chart data
+  const chartLabels = rows.map(r=>r.month);
+  const chartBal    = rows.map(r=>r.balance);
+  const chartCumInt = rows.map(r=>r.cumInt);
+  const chartPay    = rows.map(()=>basePayment+monthlyExtra);
+
+  if(amortChart){
+    amortChart.data.labels=chartLabels;
+    amortChart.data.datasets[0].data=chartBal;
+    amortChart.data.datasets[1].data=chartCumInt;
+    amortChart.data.datasets[2].data=chartPay;
+    amortChart.update('none');
+  } else {
+    amortChart=new Chart(document.getElementById('amort-chart'),{
+      type:'line',
+      data:{labels:chartLabels,datasets:[
+        {label:'Balance',data:chartBal,borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,0.07)',fill:true,tension:0.3,pointRadius:0},
+        {label:'Cum. Interest',data:chartCumInt,borderColor:'#4ade80',fill:false,tension:0.3,pointRadius:0},
+        {label:'Payment',data:chartPay,borderColor:'#ef4444',fill:false,tension:0.3,pointRadius:0,borderDash:[4,3]},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,animation:{duration:150},
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fL2(ctx.raw)}`}}},
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9},maxTicksLimit:12},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}},grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // Schedule dates
+  if(rows.length>0){
+    document.getElementById('sched-dates').textContent=
+      `(${rows[0].date.toLocaleDateString('en-US',{month:'short',year:'numeric'})} — ${rows[rows.length-1].date.toLocaleDateString('en-US',{month:'short',year:'numeric'})})`;
+  }
+
+  // Table
+  const tbody=document.getElementById('amort-tbody');
+  tbody.innerHTML='';
+
+  if(viewMode==='annual'){
+    const yearMap={};
+    rows.forEach(r=>{
+      const yr=r.year;
+      if(!yearMap[yr]) yearMap[yr]={payment:0,principal:0,interest:0,cumInt:0,balance:0,months:[]};
+      yearMap[yr].payment+=r.payment; yearMap[yr].principal+=r.principal;
+      yearMap[yr].interest+=r.interest; yearMap[yr].cumInt=r.cumInt;
+      yearMap[yr].balance=r.balance; yearMap[yr].months.push(r);
+    });
+    Object.keys(yearMap).forEach(yr=>{
+      const yd=yearMap[yr];
+      const gid='yr-'+yr;
+      const tr=document.createElement('tr');
+      tr.style.cursor='pointer';
+      tr.onclick=()=>toggleYear(gid);
+      tr.innerHTML=`
+        <td><span class="expand-btn">⊕</span> ${yr}</td>
+        <td>${fL2(yd.payment)}</td>
+        <td style="color:var(--grn)">${fL2(yd.principal)}</td>
+        <td style="color:var(--red)">${fL2(yd.interest)}</td>
+        <td style="color:var(--mut)">${fL2(yd.cumInt)}</td>
+        <td>${fL2(yd.balance)}</td>
+      `;
+      tbody.appendChild(tr);
+      const mg=document.createElement('tbody');
+      mg.id=gid; mg.className='month-group';
+      yd.months.forEach(mr=>{
+        const mtr=document.createElement('tr');
+        mtr.innerHTML=`
+          <td style="padding-left:1.5rem">${mr.date.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</td>
+          <td>${fL2(mr.payment)}</td><td>${fL2(mr.principal)}</td>
+          <td>${fL2(mr.interest)}</td><td>${fL2(mr.cumInt)}</td><td>${fL2(mr.balance)}</td>`;
+        mg.appendChild(mtr);
+      });
+      tbody.appendChild(mg);
+    });
+  } else {
+    rows.forEach(r=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td>${r.date.toLocaleDateString('en-US',{month:'short',year:'numeric'})}</td>
+        <td>${fL2(r.payment)}</td>
+        <td style="color:var(--grn)">${fL2(r.principal)}</td>
+        <td style="color:var(--red)">${fL2(r.interest)}</td>
+        <td style="color:var(--mut)">${fL2(r.cumInt)}</td>
+        <td>${fL2(r.balance)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+function toggleYear(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.classList.toggle('open');
+  const tr=el.previousElementSibling;
+  if(tr){ const btn=tr.querySelector('.expand-btn'); if(btn)btn.textContent=el.classList.contains('open')?'⊖':'⊕'; }
+}
+
+function doSave(){
+  const ids=['loan-amount','loan-term','interest-rate','orig-fee','other-fees','start-date'];
+  const state={_termUnit:termUnit,_viewMode:viewMode,_extras:extrasList,_nextExtraId:nextExtraId};
+  ids.forEach(id=>{const el=document.getElementById(id);if(el)state[id]=el.value;});
+  storeSave('fin_loan_v1',state); showSaveConfirm();
+}
+
+function loadSaved(){
+  const s=storeLoad('fin_loan_v1'); if(!s) return;
+  if(s._termUnit)   setTermUnit(s._termUnit);
+  if(s._viewMode)   setView(s._viewMode);
+  if(s._extras)     {extrasList=s._extras; renderExtras();}
+  if(s._nextExtraId)nextExtraId=s._nextExtraId;
+  Object.keys(s).forEach(k=>{if(k.startsWith('_'))return;const el=document.getElementById(k);if(el)el.value=s[k];});
+  document.getElementById('rate-slider').value=document.getElementById('interest-rate').value;
+}
+
+function doExport(){
+  document.getElementById('pr-inner').innerHTML=`
+    <style>body{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt}h1{font-size:14pt;border-bottom:2px solid #111;padding-bottom:3mm;margin-bottom:4mm}
+    table{width:100%;border-collapse:collapse;font-size:7.5pt}th,td{padding:1.5mm 2mm;border-bottom:0.4px solid #eee;text-align:right}th:first-child,td:first-child{text-align:left}</style>
+    <h1>Loan Calculator Report</h1>
+    <p><strong>Monthly Payment:</strong> ${document.getElementById('hero-payment').textContent}</p>
+    ${document.getElementById('loan-summary').innerHTML}
+    <br>${document.getElementById('amort-table').outerHTML}`;
+  window.print();
+}
+
+document.getElementById('start-date').value=new Date().toISOString().split('T')[0];
+loadSaved();
+render();
+</script>
+</body>
+</html>

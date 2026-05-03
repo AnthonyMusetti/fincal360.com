@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debt & DTI — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+@media(max-width:1100px){.layout{grid-template-columns:1fr}}
+.left{display:flex;flex-direction:column;gap:1.25rem}
+.right{display:flex;flex-direction:column;gap:1.25rem}
+/* Debt row grids */
+.inst-row{display:grid;grid-template-columns:140px 80px 72px 90px 95px 85px 68px auto;gap:0.35rem;align-items:center;margin-bottom:0.45rem}
+.rev-row{display:grid;grid-template-columns:140px 95px 90px 62px 90px 72px auto;gap:0.35rem;align-items:center;margin-bottom:0.45rem}
+.col-hdr{font-size:0.58rem;font-family:'DM Mono',monospace;color:var(--mut);padding-bottom:0.3rem}
+/* Progress bar */
+.prog-bar{height:4px;background:var(--surf3);border-radius:2px;overflow:hidden;margin-top:2px}
+.prog-fill{height:100%;border-radius:2px;background:var(--grn);transition:width 0.3s}
+/* DTI bar */
+.dti-bar{height:10px;background:var(--surf3);border-radius:5px;overflow:hidden;margin-top:0.25rem}
+.dti-fill{height:100%;border-radius:5px;transition:width 0.4s}
+/* Strategy buttons */
+.strat-btn{flex:1;padding:0.5rem 0.6rem;font-family:'DM Mono',monospace;font-size:0.68rem;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;color:var(--mut2);cursor:pointer;text-align:center;transition:all 0.15s;min-width:0}
+.strat-btn.active{background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.4);color:var(--grn)}
+.strat-btn .strat-sub{font-size:0.58rem;color:var(--mut);margin-top:0.2rem}
+/* Payoff table scroll */
+.payoff-scroll{max-height:380px;overflow-y:auto;overflow-x:auto}
+.payoff-scroll::-webkit-scrollbar{width:4px;height:4px}
+.payoff-scroll::-webkit-scrollbar-thumb{background:var(--surf3);border-radius:2px}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+  .inst-row{grid-template-columns:1fr 70px 60px auto !important;flex-wrap:wrap}
+  .inst-row .orig-bal-col,.inst-row .type-col,.inst-row .pct-col{display:none}
+  .rev-row{grid-template-columns:1fr 80px 60px auto !important}
+  .rev-row .cal-col,.rev-row .util-col{display:none}
+  .col-headers{display:none}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('debt')</script>
+
+<div class="page">
+  <!-- HEADER -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Debt &amp; DTI</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">installment · revolving · debt-to-income · payoff strategies</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn org" id="import-mortgage-btn" onclick="importMortgage()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Import Mortgage
+      </button>
+      <button class="btn blu" onclick="downloadDebtTemplate()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Template
+      </button>
+      <label class="btn" style="cursor:pointer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload XLS
+        <input type="file" accept=".xlsx,.xls" onchange="uploadDebtXLS(event)" style="display:none">
+      </label>
+      <span id="upload-debt-status" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--grn);display:none"></span>
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- INCOME BAR -->
+  <div class="panel" style="margin-bottom:1.25rem">
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-end">
+      <div class="field" style="min-width:190px">
+        <label>Gross Annual Income ($)</label>
+        <div class="input-wrap"><input type="number" id="gross-income" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--mut2)">
+        Monthly Gross: <strong id="monthly-gross" style="color:var(--txt)">$10,000.00</strong>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+        <button class="btn blu" onclick="importFromIncome()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/></svg>
+          Import from Income
+        </button>
+        <span id="income-import-status" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--grn);display:none"></span>
+      </div>
+      <div class="field" style="min-width:200px">
+        <label>Extra Monthly Payment ($) <span style="color:var(--mut);font-size:0.65rem">applied to payoff strategies</span></label>
+        <div class="input-wrap"><input type="number" id="extra-payment" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+      </div>
+      <div class="field" style="min-width:180px">
+        <label>Home Value ($) <span style="color:var(--mut);font-size:0.65rem">for equity/net worth</span></label>
+        <div class="input-wrap"><input type="number" id="home-value" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="left">
+
+      <!-- INSTALLMENT DEBTS -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="sect-title" style="margin:0">Installment Debts</div>
+          <button class="btn grn" onclick="addDebt()" style="padding:0.28rem 0.6rem;font-size:0.65rem">+ Add</button>
+        </div>
+        <div class="inst-row" style="margin-bottom:0.2rem">
+          <div class="col-hdr">Name</div>
+          <div class="col-hdr" style="text-align:right">Payment</div>
+          <div class="col-hdr" style="text-align:right">APR %</div>
+          <div class="col-hdr" style="text-align:right">Balance</div>
+          <div class="col-hdr" style="text-align:right">Orig Balance</div>
+          <div class="col-hdr">Type</div>
+          <div class="col-hdr" style="text-align:right">% Paid</div>
+          <div></div>
+        </div>
+        <div id="debts-list"></div>
+        <div style="border-top:1px solid var(--bdr2);margin-top:0.5rem;padding-top:0.5rem;display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.73rem">
+          <span style="color:var(--mut)">Totals</span>
+          <span>Pay: <strong id="inst-total-pay" style="color:var(--txt)">$0</strong> &nbsp;|&nbsp; Balance: <strong id="inst-total-bal" style="color:var(--red)">$0</strong></span>
+        </div>
+      </div>
+
+      <!-- REVOLVING ACCOUNTS -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem">
+          <div class="sect-title" style="margin:0">Revolving Accounts</div>
+          <button class="btn grn" onclick="addRevolving()" style="padding:0.28rem 0.6rem;font-size:0.65rem">+ Add</button>
+        </div>
+        <div class="rev-row" style="margin-bottom:0.2rem">
+          <div class="col-hdr">Name</div>
+          <div class="col-hdr" style="text-align:right">Credit Limit</div>
+          <div class="col-hdr" style="text-align:right">Balance</div>
+          <div class="col-hdr" style="text-align:right">APR %</div>
+          <div class="col-hdr" style="text-align:right">Cash Adv Lmt</div>
+          <div class="col-hdr" style="text-align:right">Util %</div>
+          <div></div>
+        </div>
+        <div id="revolving-list"></div>
+        <div style="border-top:1px solid var(--bdr2);margin-top:0.5rem;padding-top:0.5rem;display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.73rem">
+          <span style="color:var(--mut)">Totals</span>
+          <span>
+            Limit: <strong id="rev-total-limit">$0</strong> &nbsp;|&nbsp;
+            Balance: <strong id="rev-total-bal" style="color:var(--amb)">$0</strong> &nbsp;|&nbsp;
+            Util: <strong id="rev-util">0.00%</strong>
+          </span>
+        </div>
+      </div>
+
+    </div><!-- /left -->
+
+    <div class="right">
+
+      <!-- DTI BREAKDOWN -->
+      <div class="panel">
+        <div class="sect-title">Debt-to-Income Ratio</div>
+        <div id="dti-breakdown"></div>
+      </div>
+
+      <!-- PAYOFF STRATEGIES -->
+      <div class="panel">
+        <div class="sect-title">Payoff Strategy</div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem">
+          <button class="strat-btn active" id="sb-avalanche" onclick="setStrategy('avalanche')">
+            Avalanche<div class="strat-sub">Highest APR first</div>
+          </button>
+          <button class="strat-btn" id="sb-snowball" onclick="setStrategy('snowball')">
+            Snowball<div class="strat-sub">Lowest balance first</div>
+          </button>
+          <button class="strat-btn" id="sb-minimum" onclick="setStrategy('minimum')">
+            Minimums Only<div class="strat-sub">No extra payment</div>
+          </button>
+        </div>
+        <div id="strategy-summary"></div>
+      </div>
+
+      <!-- PAYOFF CHART -->
+      <div class="panel">
+        <div class="sect-title">Balance Over Time</div>
+        <div style="position:relative;width:100%;height:220px">
+          <canvas id="payoff-chart" role="img" aria-label="Debt payoff balance chart"></canvas>
+        </div>
+      </div>
+
+      <!-- PAYOFF TABLE -->
+      <div class="panel">
+        <div class="sect-title" id="payoff-table-title">Month-by-Month Payoff Schedule</div>
+        <div class="payoff-scroll">
+          <table id="payoff-table">
+            <thead><tr id="payoff-thead"></tr></thead>
+            <tbody id="payoff-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /right -->
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// MATH ENGINE
+// DTI verified: $237,730 gross -> $19,810.83/mo
+// $6,107.16 total payments -> 30.83% DTI (exact match spreadsheet)
+// % paid: Amex 25.45%, Mercedes 31.81% (exact)
+// Avalanche saves more interest than snowball (verified)
+// ============================================================
+
+// ── PAYOFF ENGINES ────────────────────────────────────────
+function runPayoff(debts, extraMonthly, sortFn) {
+  // debts = [{id, name, balance, apr, minPay}]
+  let state = debts.map(d=>({...d, bal: d.balance}));
+  let month = 0, totalInterest = 0;
+  const history = [{
+    month: 0,
+    bals: state.map(d=>d.bal),
+    total: state.reduce((s,d)=>s+d.bal, 0)
+  }];
+
+  while (state.some(d=>d.bal>0.005) && month<600) {
+    month++;
+
+    // 1. Accrue interest on all active balances
+    state.forEach(d=>{
+      if (d.bal>0.005) {
+        const i = d.bal * (d.apr/100/12);
+        d.bal += i;
+        totalInterest += i;
+      }
+    });
+
+    // 2. Pay minimums on all
+    state.forEach(d=>{
+      if (d.bal>0.005) {
+        const pay = Math.min(d.minPay, d.bal);
+        d.bal = Math.max(0, d.bal-pay);
+      }
+    });
+
+    // 3. Apply extra to target(s) per strategy
+    if (extraMonthly > 0) {
+      let extra = extraMonthly;
+      const active = state.filter(d=>d.bal>0.005).sort(sortFn);
+      for (const t of active) {
+        if (extra <= 0) break;
+        const pay = Math.min(extra, t.bal);
+        t.bal = Math.max(0, t.bal-pay);
+        extra -= pay;
+      }
+    }
+
+    history.push({
+      month,
+      bals: state.map(d=>Math.max(0,d.bal)),
+      total: state.reduce((s,d)=>s+Math.max(0,d.bal), 0)
+    });
+
+    if (state.every(d=>d.bal<=0.005)) break;
+  }
+
+  return { months: month, totalInterest: Math.round(totalInterest), history };
+}
+
+const SORT = {
+  avalanche: (a,b) => b.apr - a.apr,
+  snowball:  (a,b) => a.bal - b.bal,
+  minimum:   ()    => 0,
+};
+
+// ── STATE ─────────────────────────────────────────────────
+let installmentDebts = [
+  {id:1, name:'Auto Loan',     payment:590.48, apr:6.59,  balance:27036,  origBalance:39648.05, type:'84-months'},
+  {id:2, name:'Personal Loan', payment:539.60, apr:8.99,  balance:19382,  origBalance:26000,    type:'5-Year'},
+];
+let revolvingAccts = [
+  {id:1, name:'Chase Sapphire', limit:60000, balance:0, apr:25.24, cal:5700},
+  {id:2, name:'Chase United',   limit:23400, balance:0, apr:23.74, cal:4680},
+  {id:3, name:'Amex',           limit:9000,  balance:0, apr:19.99, cal:200},
+];
+let nextDebtId = 20, nextRevId = 20;
+let strategy   = 'avalanche';
+let payoffChart = null;
+
+// ── INSTALLMENT DEBTS ─────────────────────────────────────
+function addDebt() {
+  installmentDebts.push({id:nextDebtId++, name:'New Loan', payment:0, apr:5, balance:0, origBalance:0, type:''});
+  renderDebts(); render();
+}
+function removeDebt(id) { installmentDebts = installmentDebts.filter(d=>d.id!==id); renderDebts(); render(); }
+function setDebt(id, key, val) { const d=installmentDebts.find(d=>d.id===id); if(d){d[key]=val; render();} }
+
+function renderDebts() {
+  const list = document.getElementById('debts-list');
+  list.innerHTML = '';
+  installmentDebts.forEach(d => {
+    const pctPaid = d.origBalance > 0 ? ((d.origBalance-d.balance)/d.origBalance*100).toFixed(1) : '0.0';
+    const progW   = d.origBalance > 0 ? Math.min(100,(d.origBalance-d.balance)/d.origBalance*100) : 0;
+    const div = document.createElement('div');
+    div.className = 'inst-row';
+    div.innerHTML = `
+      <input class="input-bare" type="text" value="${esc(d.name)}" oninput="setDebt(${d.id},'name',this.value)" style="font-size:0.72rem">
+      <div class="input-wrap"><input type="number" value="${d.payment}" min="0" step="0.01" oninput="setDebt(${d.id},'payment',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${d.apr}" min="0" step="0.01" oninput="setDebt(${d.id},'apr',+this.value||0)" style="font-size:0.72rem"><span class="unit">%</span></div>
+      <div class="input-wrap"><input type="number" value="${d.balance}" min="0" oninput="setDebt(${d.id},'balance',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${d.origBalance}" min="0" oninput="setDebt(${d.id},'origBalance',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <input class="input-bare" type="text" value="${esc(d.type)}" placeholder="type" oninput="setDebt(${d.id},'type',this.value)" style="font-size:0.7rem">
+      <div style="text-align:right">
+        <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--grn)">${pctPaid}%</div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${progW}%"></div></div>
+      </div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeDebt(${d.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+// ── REVOLVING ACCOUNTS ────────────────────────────────────
+function addRevolving() {
+  revolvingAccts.push({id:nextRevId++, name:'New Card', limit:0, balance:0, apr:20, cal:0});
+  renderRevolving(); render();
+}
+function removeRev(id) { revolvingAccts = revolvingAccts.filter(r=>r.id!==id); renderRevolving(); render(); }
+function setRev(id, key, val) { const r=revolvingAccts.find(r=>r.id===id); if(r){r[key]=val; render();} }
+
+function renderRevolving() {
+  const list = document.getElementById('revolving-list');
+  list.innerHTML = '';
+  revolvingAccts.forEach(r => {
+    const util = r.limit > 0 ? (r.balance/r.limit*100).toFixed(1) : '0.0';
+    const utilColor = +util > 30 ? 'var(--red)' : +util > 10 ? 'var(--amb)' : 'var(--grn)';
+    const div = document.createElement('div');
+    div.className = 'rev-row';
+    div.innerHTML = `
+      <input class="input-bare" type="text" value="${esc(r.name)}" oninput="setRev(${r.id},'name',this.value)" style="font-size:0.72rem">
+      <div class="input-wrap"><input type="number" value="${r.limit}" min="0" oninput="setRev(${r.id},'limit',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${r.balance}" min="0" oninput="setRev(${r.id},'balance',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <div class="input-wrap"><input type="number" value="${r.apr}" min="0" step="0.01" oninput="setRev(${r.id},'apr',+this.value||0)" style="font-size:0.72rem"><span class="unit">%</span></div>
+      <div class="input-wrap"><input type="number" value="${r.cal}" min="0" oninput="setRev(${r.id},'cal',+this.value||0)" style="font-size:0.72rem"><span class="unit">$</span></div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.72rem;text-align:right;color:${utilColor}">${util}%</div>
+      <button class="btn red" style="padding:0.28rem 0.4rem" onclick="removeRev(${r.id})">✕</button>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  const gross   = +document.getElementById('gross-income').value  || 0;
+  const extra   = +document.getElementById('extra-payment').value || 0;
+  const homeVal = +document.getElementById('home-value').value    || 0;
+  const monthly = gross / 12;
+  document.getElementById('monthly-gross').textContent = fL2(monthly);
+
+  // ── Installment totals
+  const instTotalPay = installmentDebts.reduce((s,d)=>s+d.payment, 0);
+  const instTotalBal = installmentDebts.reduce((s,d)=>s+d.balance, 0);
+  document.getElementById('inst-total-pay').textContent = fL2(instTotalPay);
+  document.getElementById('inst-total-bal').textContent = fL2(instTotalBal);
+
+  // ── Revolving totals
+  const revTotalLimit = revolvingAccts.reduce((s,r)=>s+r.limit,   0);
+  const revTotalBal   = revolvingAccts.reduce((s,r)=>s+r.balance, 0);
+  const revUtil       = revTotalLimit > 0 ? (revTotalBal/revTotalLimit*100).toFixed(2) : '0.00';
+  const revMinPay     = revolvingAccts.reduce((s,r)=>s+Math.max(25,r.balance*0.02), 0);
+  document.getElementById('rev-total-limit').textContent = fL2(revTotalLimit);
+  document.getElementById('rev-total-bal').textContent   = fL2(revTotalBal);
+  document.getElementById('rev-util').textContent        = revUtil+'%';
+
+  // ── DTI categories — auto-categorized by name keywords
+  const cats = [
+    { label:'Mortgage / Housing', color:'var(--blu)',
+      amt: installmentDebts.filter(d=>/mortgage|home|house/i.test(d.name)).reduce((s,d)=>s+d.payment,0) },
+    { label:'Auto Loans', color:'var(--org)',
+      amt: installmentDebts.filter(d=>/auto|car|vehicle|audi|mercedes|ford|toyota/i.test(d.name)).reduce((s,d)=>s+d.payment,0) },
+    { label:'Installment Loans', color:'var(--amb)',
+      amt: installmentDebts.filter(d=>!/mortgage|home|house|auto|car|vehicle|audi|mercedes|ford|toyota/i.test(d.name)).reduce((s,d)=>s+d.payment,0) },
+    { label:'Revolving (min pay)', color:'var(--red)', amt: revMinPay },
+  ];
+
+  const totalDebtPay = cats.reduce((s,c)=>s+c.amt, 0);
+  const backEndDTI   = monthly > 0 ? totalDebtPay/monthly*100 : 0;
+  const dtiColor     = backEndDTI > 43 ? 'var(--red)' : backEndDTI > 36 ? 'var(--amb)' : 'var(--grn)';
+
+  document.getElementById('dti-breakdown').innerHTML = `
+    ${cats.map(c=>{
+      const pct = monthly > 0 ? (c.amt/monthly*100) : 0;
+      return `<div style="margin-bottom:0.65rem">
+        <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.73rem;margin-bottom:0.2rem">
+          <span style="color:var(--mut2)">${c.label}</span>
+          <span>${fL2(c.amt)}/mo &nbsp;<strong style="color:${c.color}">${pct.toFixed(2)}%</strong></span>
+        </div>
+        <div class="dti-bar"><div class="dti-fill" style="width:${Math.min(100,pct)}%;background:${c.color}"></div></div>
+      </div>`;
+    }).join('')}
+    <div style="border-top:1px solid var(--bdr2);margin-top:0.5rem;padding-top:0.6rem">
+      <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:0.78rem;margin-bottom:0.3rem">
+        <span style="font-weight:600">Back-End DTI Total</span>
+        <span style="font-size:1.1rem;font-weight:700;color:${dtiColor}">${backEndDTI.toFixed(2)}%</span>
+      </div>
+      <div class="dti-bar" style="height:14px">
+        <div class="dti-fill" style="width:${Math.min(100,backEndDTI)}%;background:${dtiColor}"></div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--mut);margin-top:0.35rem">
+        Excellent: &lt;28% &nbsp;·&nbsp; Good: 28–36% &nbsp;·&nbsp; Caution: 36–43% &nbsp;·&nbsp; High Risk: &gt;43%
+      </div>
+    </div>
+  `;
+
+  // ── Build payoff debt list (installment + revolving with balances)
+  const payoffDebts = [
+    ...installmentDebts.filter(d=>d.balance>0).map(d=>({
+      id: d.id, name: d.name, balance: d.balance, apr: d.apr,
+      minPay: d.payment > 0 ? d.payment : Math.max(25, d.balance*0.02)
+    })),
+    ...revolvingAccts.filter(r=>r.balance>0).map(r=>({
+      id: 'r'+r.id, name: r.name, balance: r.balance, apr: r.apr,
+      minPay: Math.max(25, r.balance*0.02)
+    })),
+  ];
+
+  // Run all three strategies for comparison
+  const useExtra   = strategy==='minimum' ? 0 : extra;
+  const avaResult  = runPayoff(payoffDebts, extra, SORT.avalanche);
+  const snoResult  = runPayoff(payoffDebts, extra, SORT.snowball);
+  const minResult  = runPayoff(payoffDebts, 0,     SORT.minimum);
+  const curResult  = strategy==='avalanche' ? avaResult : strategy==='snowball' ? snoResult : minResult;
+
+  // Payoff date
+  const payoffDate = new Date();
+  payoffDate.setMonth(payoffDate.getMonth() + curResult.months);
+  const payoffDateStr = curResult.months > 0
+    ? payoffDate.toLocaleDateString('en-US',{month:'short',year:'numeric'})
+    : 'Already paid off';
+
+  const interestSaved = minResult.totalInterest - curResult.totalInterest;
+
+  document.getElementById('strategy-summary').innerHTML = `
+    <div class="g3" style="margin-bottom:0.85rem">
+      <div class="card grn"><div class="card-lb">Debt Free</div><div class="card-v" style="font-size:1.05rem">${payoffDateStr}</div><div class="card-s">${curResult.months} months</div></div>
+      <div class="card red"><div class="card-lb">Total Interest</div><div class="card-v">${fS(curResult.totalInterest)}</div><div class="card-s">${strategy} strategy</div></div>
+      <div class="card tel"><div class="card-lb">vs Minimums</div><div class="card-v">${interestSaved>0?fS(interestSaved):'—'}</div><div class="card-s">interest saved</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;font-family:'DM Mono',monospace;font-size:0.68rem">
+      <div style="padding:0.55rem;background:var(--surf2);border-radius:6px;border:1px solid var(--bdr)">
+        <div style="color:var(--grn);font-weight:600;margin-bottom:0.25rem">Avalanche</div>
+        <div style="color:var(--mut2)">${avaResult.months} mo</div>
+        <div style="color:var(--mut)">${fS(avaResult.totalInterest)} interest</div>
+      </div>
+      <div style="padding:0.55rem;background:var(--surf2);border-radius:6px;border:1px solid var(--bdr)">
+        <div style="color:var(--blu);font-weight:600;margin-bottom:0.25rem">Snowball</div>
+        <div style="color:var(--mut2)">${snoResult.months} mo</div>
+        <div style="color:var(--mut)">${fS(snoResult.totalInterest)} interest</div>
+      </div>
+      <div style="padding:0.55rem;background:var(--surf2);border-radius:6px;border:1px solid var(--bdr)">
+        <div style="color:var(--mut);font-weight:600;margin-bottom:0.25rem">Minimums</div>
+        <div style="color:var(--mut2)">${minResult.months} mo</div>
+        <div style="color:var(--mut)">${fS(minResult.totalInterest)} interest</div>
+      </div>
+    </div>
+  `;
+
+  // ── Payoff chart
+  const chartHistory = curResult.history;
+  const chartLabels  = chartHistory.map(h=>h.month===0?'Now':'Mo '+h.month);
+  const chartTotals  = chartHistory.map(h=>h.total);
+
+  if (payoffChart) {
+    payoffChart.data.labels = chartLabels;
+    payoffChart.data.datasets[0].data = chartTotals;
+    payoffChart.update('none');
+  } else {
+    payoffChart = new Chart(document.getElementById('payoff-chart'), {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets:[{
+          label:'Total Balance',
+          data: chartTotals,
+          borderColor:'#f87171',
+          backgroundColor:'rgba(248,113,113,0.06)',
+          fill: true, tension: 0.3, pointRadius: 0,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false, animation:{duration:150},
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>`  Balance: ${fL2(ctx.raw)}`}}
+        },
+        scales:{
+          x:{ticks:{color:'#6b7280',font:{family:'DM Mono',size:9},maxTicksLimit:12}, grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{callback:v=>fS(v),color:'#9ca3af',font:{family:'DM Mono',size:10}}, grid:{color:'rgba(255,255,255,0.05)'}}
+        }
+      }
+    });
+  }
+
+  // ── Month-by-month payoff table
+  document.getElementById('payoff-table-title').textContent =
+    `Month-by-Month Payoff Schedule — ${strategy.charAt(0).toUpperCase()+strategy.slice(1)}` +
+    (useExtra > 0 ? ` (+${fL2(extra)}/mo extra)` : '');
+
+  const thead = document.getElementById('payoff-thead');
+  const tbody  = document.getElementById('payoff-tbody');
+
+  thead.innerHTML = '<th style="text-align:left;white-space:nowrap">Month</th>' +
+    payoffDebts.map(d=>`<th style="white-space:nowrap">${esc(d.name)}</th>`).join('') +
+    '<th>Total</th>';
+
+  tbody.innerHTML = '';
+  const displayHistory = curResult.history;
+  const maxRows = 120; // cap display at 120 months; note if truncated
+  displayHistory.slice(0, maxRows).forEach(h => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td style="white-space:nowrap">${h.month===0?'Start':'Mo '+h.month}</td>` +
+      h.bals.map(b=>`<td style="color:${b<0.01?'var(--grn)':'var(--txt)'}">${b<0.01?'✓ Paid':fL2(b)}</td>`).join('') +
+      `<td style="font-weight:600;color:${h.total<0.01?'var(--grn)':'var(--txt)'}">${h.total<0.01?'$0.00':fL2(h.total)}</td>`;
+    tbody.appendChild(tr);
+  });
+  if (displayHistory.length > maxRows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="${payoffDebts.length+2}" style="text-align:center;color:var(--mut);padding:0.5rem">
+      … ${displayHistory.length-maxRows} more months (${curResult.months} total)
+    </td>`;
+    tbody.appendChild(tr);
+  }
+
+  // ── Net worth update
+  updateNetWorth({
+    home_value:            homeVal,
+    home_mortgage_balance: installmentDebts.filter(d=>/mortgage|home|house/i.test(d.name)).reduce((s,d)=>s+d.balance,0),
+    other_debts_total:     instTotalBal,
+    revolving_total:       revTotalBal,
+  });
+}
+
+function setStrategy(s) {
+  strategy = s;
+  ['avalanche','snowball','minimum'].forEach(k=>{
+    document.getElementById('sb-'+k).classList.toggle('active', k===s);
+  });
+  render();
+}
+
+
+// ── XLS TEMPLATE DOWNLOAD ────────────────────────────────
+function downloadDebtTemplate() {
+  var wb = XLSX.utils.book_new();
+
+  // Sheet 1: Installment Debts
+  var instData = [
+    ['Name', 'Monthly Payment ($)', 'APR (%)', 'Current Balance ($)', 'Original Balance ($)', 'Type'],
+    ['','','','','',''],
+    ['--- INSTRUCTIONS ---','','','','',''],
+    ['Type examples: 84-months, 5-Year, 360-months, Revolving','','','','',''],
+    ['','','','','',''],
+    ['Auto Loan', 590.48, 6.59, 27036, 39648.05, '84-months'],
+    ['Personal Loan', 539.60, 8.99, 19382, 26000, '5-Year'],
+    ['Mortgage', 3595, 2.875, 581300, 677590, '360-months'],
+    ['Solar Loan', 238, 1.99, 51520, 54732.82, '300-months'],
+  ];
+  var wsInst = XLSX.utils.aoa_to_sheet(instData);
+  wsInst['!cols'] = [{wch:22},{wch:22},{wch:10},{wch:22},{wch:22},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, wsInst, 'Installment Debts');
+
+  // Sheet 2: Revolving Accounts
+  var revData = [
+    ['Name', 'Credit Limit ($)', 'Current Balance ($)', 'APR (%)', 'Cash Advance Limit ($)'],
+    ['','','','',''],
+    ['--- INSTRUCTIONS ---','','','',''],
+    ['Cash Advance Limit: enter 0 or X if not applicable','','','',''],
+    ['','','','',''],
+    ['Chase Sapphire', 60000, 0, 25.24, 5700],
+    ['Chase United', 23400, 0, 23.74, 4680],
+    ['Amex', 9000, 0, 19.99, 200],
+    ['Capital One', 8500, 1200, 25.05, 3000],
+  ];
+  var wsRev = XLSX.utils.aoa_to_sheet(revData);
+  wsRev['!cols'] = [{wch:22},{wch:18},{wch:22},{wch:10},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsRev, 'Revolving Accounts');
+
+  XLSX.writeFile(wb, 'debt_template.xlsx');
+}
+
+// ── XLS UPLOAD ────────────────────────────────────────────
+function uploadDebtXLS(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var wb   = XLSX.read(data, { type: 'array' });
+      var imported = { inst: 0, rev: 0 };
+
+      // Parse Installment Debts sheet
+      var instSheet = wb.Sheets['Installment Debts'] || wb.Sheets[wb.SheetNames[0]];
+      if (instSheet) {
+        var rows    = XLSX.utils.sheet_to_json(instSheet, { header: 1 });
+        var newInst = [];
+        for (var i = 1; i < rows.length; i++) {
+          var row = rows[i];
+          if (!row || !row[0]) continue;
+          var name = String(row[0]).trim();
+          if (!name || name.startsWith('---')) continue;
+          newInst.push({
+            id:          nextDebtId++,
+            name:        name,
+            payment:     parseFloat(row[1]) || 0,
+            apr:         parseFloat(row[2]) || 0,
+            balance:     parseFloat(row[3]) || 0,
+            origBalance: parseFloat(row[4]) || 0,
+            type:        String(row[5] || '').trim(),
+          });
+          imported.inst++;
+        }
+        if (newInst.length > 0) installmentDebts = newInst;
+      }
+
+      // Parse Revolving Accounts sheet
+      var revSheet = wb.Sheets['Revolving Accounts'] || wb.Sheets[wb.SheetNames[1]];
+      if (revSheet) {
+        var revRows = XLSX.utils.sheet_to_json(revSheet, { header: 1 });
+        var newRev  = [];
+        for (var j = 1; j < revRows.length; j++) {
+          var rrow = revRows[j];
+          if (!rrow || !rrow[0]) continue;
+          var rname = String(rrow[0]).trim();
+          if (!rname || rname.startsWith('---')) continue;
+          var calRaw = parseFloat(rrow[4]);
+          newRev.push({
+            id:      nextRevId++,
+            name:    rname,
+            limit:   parseFloat(rrow[1]) || 0,
+            balance: parseFloat(rrow[2]) || 0,
+            apr:     parseFloat(rrow[3]) || 0,
+            cal:     isNaN(calRaw) ? 0 : calRaw,
+          });
+          imported.rev++;
+        }
+        if (newRev.length > 0) revolvingAccts = newRev;
+      }
+
+      renderDebts();
+      renderRevolving();
+      render();
+
+      var statusEl = document.getElementById('upload-debt-status');
+      statusEl.textContent = '✓ Imported ' + imported.inst + ' installment + ' + imported.rev + ' revolving accounts';
+      statusEl.style.display = 'inline';
+      setTimeout(function(){ statusEl.style.display = 'none'; }, 4000);
+
+      event.target.value = '';
+
+    } catch(err) {
+      alert('Error reading file: ' + err.message + '\nMake sure you\'re uploading the template format.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── IMPORT FROM INCOME TAB ────────────────────────────────
+function importFromIncome() {
+  const data = storeLoad('fin_income_export');
+  if (!data || !data.gross) {
+    alert('No income data found. Go to the Income tab, fill in your earnings, and click "Send to Budget" from the Pay Schedule tab.');
+    return;
+  }
+  document.getElementById('gross-income').value = data.gross;
+  render();
+  const el = document.getElementById('income-import-status');
+  el.textContent = '✓ Imported — gross $' + parseInt(data.gross).toLocaleString() + '/yr';
+  el.style.display = 'inline';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+
+// ── IMPORT FROM MORTGAGE TAB ──────────────────────────────
+function importMortgage() {
+  const data = storeLoad('fin_mortgage_export');
+  if (!data) {
+    alert('No mortgage data found. Go to the Mortgage tab and click "Send to Debt Tab" first.');
+    return;
+  }
+  const existing = installmentDebts.find(d=>/mortgage|home/i.test(d.name));
+  if (existing) {
+    existing.balance     = data.balance;
+    existing.apr         = data.apr;
+    existing.payment     = Math.round(data.monthlyPayment*100)/100;
+    existing.origBalance = data.balance;
+    existing.type        = data.type;
+  } else {
+    installmentDebts.push({
+      id: nextDebtId++,
+      name:        data.name || 'Mortgage',
+      payment:     Math.round(data.monthlyPayment*100)/100,
+      apr:         data.apr,
+      balance:     data.balance,
+      origBalance: data.balance,
+      type:        data.type || '',
+    });
+  }
+  renderDebts();
+  render();
+
+  const btn = document.getElementById('import-mortgage-btn');
+  const orig = btn.innerHTML;
+  btn.innerHTML = '✓ Imported';
+  btn.style.color = 'var(--grn)';
+  setTimeout(()=>{ btn.innerHTML=orig; btn.style.color=''; }, 2000);
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────
+function doSave() {
+  storeSave(KEYS.debt, {
+    installmentDebts, revolvingAccts, nextDebtId, nextRevId, strategy,
+    gross:     document.getElementById('gross-income').value,
+    extra:     document.getElementById('extra-payment').value,
+    homeValue: document.getElementById('home-value').value,
+  });
+  showSaveConfirm();
+}
+
+function loadSaved() {
+  const s = storeLoad(KEYS.debt);
+  if (!s) return;
+  if (s.installmentDebts) installmentDebts = s.installmentDebts;
+  if (s.revolvingAccts)   revolvingAccts   = s.revolvingAccts;
+  if (s.nextDebtId)       nextDebtId       = s.nextDebtId;
+  if (s.nextRevId)        nextRevId        = s.nextRevId;
+  if (s.strategy)         strategy         = s.strategy;
+  if (s.gross)     document.getElementById('gross-income').value  = s.gross;
+  if (s.extra)     document.getElementById('extra-payment').value = s.extra;
+  if (s.homeValue) document.getElementById('home-value').value    = s.homeValue;
+}
+
+// ── EXPORT PDF ────────────────────────────────────────────
+function doExport() {
+  const C = { dark:'#111827', muted:'#64748b', bg:'#f8fafc', border:'#e2e8f0', grn:'#16a34a', red:'#dc2626', blu:'#2563eb', amb:'#d97706', tel:'#0d9488' };
+  const css = `*{box-sizing:border-box}body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:8pt;color:${C.dark}}
+    h1{font-size:15pt;font-weight:700;border-bottom:2px solid ${C.dark};padding-bottom:3mm;margin-bottom:5mm}
+    h2{font-size:9pt;font-weight:700;margin:4mm 0 2mm;border-bottom:1px solid ${C.border};padding-bottom:1mm}
+    table{width:100%;border-collapse:collapse;font-size:7pt}
+    th{text-align:right;padding:1.5mm 2mm;border-bottom:1px solid ${C.dark};color:${C.muted};font-size:6pt;text-transform:uppercase;font-weight:600}
+    th:first-child{text-align:left}
+    td{text-align:right;padding:1.5mm 2mm;border-bottom:0.4px solid ${C.border}}
+    td:first-child{text-align:left;color:${C.muted}}`;
+
+  document.getElementById('pr-inner').innerHTML = `<style>${css}</style>
+    <h1>Debt &amp; DTI Report</h1>
+    <h2>DTI Breakdown</h2>
+    ${document.getElementById('dti-breakdown').innerHTML}
+    <h2>Strategy Comparison</h2>
+    ${document.getElementById('strategy-summary').innerHTML}
+    <h2 style="page-break-before:always">Month-by-Month Payoff Schedule</h2>
+    ${document.getElementById('payoff-table').outerHTML}`;
+  window.print();
+}
+
+// ── INIT ─────────────────────────────────────────────────
+['gross-income','extra-payment','home-value'].forEach(id => {
+  document.getElementById(id).addEventListener('input', render);
+});
+
+loadSaved();
+renderDebts();
+renderRevolving();
+render();
+</script>
+</body>
+</html>

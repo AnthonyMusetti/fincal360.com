@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Car Loan Calculator — FinLit360</title>
+<link rel="stylesheet" href="shared.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+.layout{display:grid;grid-template-columns:360px 1fr;gap:1.25rem;align-items:start}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}}
+.controls{position:sticky;top:5rem;display:flex;flex-direction:column;gap:1rem}
+.right{display:flex;flex-direction:column;gap:1.25rem}
+/* Mode tabs */
+.mode-bar{display:flex;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;margin-bottom:1rem}
+.mode-btn{flex:1;padding:0.55rem;font-family:'DM Mono',monospace;font-size:0.72rem;text-align:center;cursor:pointer;background:var(--surf2);color:var(--mut2);border:none;transition:all 0.15s;border-right:1px solid var(--bdr)}
+.mode-btn:last-child{border-right:none}
+.mode-btn.active{background:rgba(74,222,128,0.1);color:var(--grn)}
+/* View toggle for amort table */
+.view-bar{display:flex;gap:0.4rem;margin-bottom:0.85rem}
+.view-btn{padding:0.35rem 0.85rem;font-family:'DM Mono',monospace;font-size:0.68rem;background:var(--surf2);border:1px solid var(--bdr);border-radius:5px;color:var(--mut2);cursor:pointer;transition:all 0.15s}
+.view-btn.active{background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.4);color:var(--grn)}
+/* Summary rows */
+.srow{display:flex;justify-content:space-between;align-items:baseline;padding:0.42rem 0;border-bottom:1px solid var(--bdr)}
+.srow:last-child{border-bottom:none}
+.srow-lbl{font-size:0.78rem;font-family:'DM Mono',monospace;color:var(--mut2)}
+.srow-val{font-size:0.85rem;font-weight:600;font-family:'DM Mono',monospace}
+/* Hero result */
+.hero-result{background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.2);border-radius:12px;padding:1.25rem 1.5rem;display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap}
+.hero-label{font-size:0.78rem;font-family:'DM Mono',monospace;color:var(--mut2)}
+.hero-value{font-size:2.2rem;font-weight:700;letter-spacing:-0.03em;color:var(--grn)}
+/* Checkbox row */
+.check-row{display:flex;align-items:center;gap:0.6rem;margin-top:0.35rem}
+.check-row input[type=checkbox]{width:14px;height:14px;accent-color:var(--grn);cursor:pointer}
+.check-row label{font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut2);cursor:pointer}
+
+@media(max-width:768px){
+  .layout{grid-template-columns:1fr !important}
+}
+</style>
+</head>
+<body>
+<script src="shared.js"></script>
+<script>renderSiteHeader('car')</script>
+
+<div class="page">
+  <!-- PAGE HEADER -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 style="font-size:1.7rem;font-weight:700;letter-spacing:-0.02em">Car Loan Calculator</h1>
+      <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut);margin-top:0.2rem">payment · total cost · trade-in · amortization</div>
+    </div>
+    <div class="btn-row no-print">
+      <button class="btn grn" id="save-btn" onclick="doSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      <button class="btn" onclick="doExport()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- LEFT: INPUTS -->
+    <div class="controls">
+      <div class="panel">
+        <!-- MODE TABS -->
+        <div class="mode-bar">
+          <button class="mode-btn active" id="btn-total"   onclick="setMode('total')">Total Price</button>
+          <button class="mode-btn"        id="btn-monthly" onclick="setMode('monthly')">Monthly Payment</button>
+        </div>
+
+        <!-- TOTAL PRICE MODE -->
+        <div id="mode-total">
+          <div style="display:flex;flex-direction:column;gap:0.7rem">
+            <div class="field">
+              <label>Auto Price ($)</label>
+              <div class="input-wrap"><input type="number" id="t-price" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="g2">
+              <div class="field">
+                <label>Loan Term (months)</label>
+                <div class="input-wrap"><input type="number" id="t-term" value="60" min="1" max="120" oninput="render()"><span class="unit">mo</span></div>
+              </div>
+              <div class="field">
+                <label>Interest Rate (%)</label>
+                <div style="display:flex;flex-direction:column;gap:0.3rem">
+                  <div class="input-wrap"><input type="number" id="t-rate" value="5" min="0" max="30" step="0.1" oninput="onTRateInput()"><span class="unit">%</span></div>
+                  <input type="range" id="t-rate-slider" min="1" max="12" step="0.125" value="5" oninput="onTRateSlider()">
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Cash Incentives ($)</label>
+              <div class="input-wrap"><input type="number" id="t-incentives" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="field">
+              <label>Down Payment ($)</label>
+              <div class="input-wrap"><input type="number" id="t-down" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="g2">
+              <div class="field">
+                <label>Trade-in Value ($)</label>
+                <div class="input-wrap"><input type="number" id="t-tradein" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+              </div>
+              <div class="field">
+                <label>Owed on Trade-in ($)</label>
+                <div class="input-wrap"><input type="number" id="t-tradeowed" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Sales Tax (%)</label>
+              <div class="input-wrap"><input type="number" id="t-tax" value="" min="0" max="20" step="0.01" oninput="render()"><span class="unit">%</span></div>
+            </div>
+            <div class="field">
+              <label>Title, Registration &amp; Other Fees ($)</label>
+              <div class="input-wrap"><input type="number" id="t-fees" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="check-row">
+              <input type="checkbox" id="t-rolltax" onchange="render()">
+              <label for="t-rolltax">Include taxes and fees in loan</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- MONTHLY PAYMENT MODE -->
+        <div id="mode-monthly" style="display:none">
+          <div style="display:flex;flex-direction:column;gap:0.7rem">
+            <div class="field">
+              <label>Target Monthly Payment ($)</label>
+              <div class="input-wrap"><input type="number" id="m-payment" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="g2">
+              <div class="field">
+                <label>Loan Term (months)</label>
+                <div class="input-wrap"><input type="number" id="m-term" value="60" min="1" max="120" oninput="render()"><span class="unit">mo</span></div>
+              </div>
+              <div class="field">
+                <label>Interest Rate (%)</label>
+                <div style="display:flex;flex-direction:column;gap:0.3rem">
+                  <div class="input-wrap"><input type="number" id="m-rate" value="5" min="0" max="30" step="0.1" oninput="onMRateInput()"><span class="unit">%</span></div>
+                  <input type="range" id="m-rate-slider" min="1" max="12" step="0.125" value="5" oninput="onMRateSlider()">
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Down Payment ($)</label>
+              <div class="input-wrap"><input type="number" id="m-down" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="g2">
+              <div class="field">
+                <label>Trade-in Value ($)</label>
+                <div class="input-wrap"><input type="number" id="m-tradein" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+              </div>
+              <div class="field">
+                <label>Owed on Trade-in ($)</label>
+                <div class="input-wrap"><input type="number" id="m-tradeowed" value="0" min="0" oninput="render()"><span class="unit">$</span></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Sales Tax (%)</label>
+              <div class="input-wrap"><input type="number" id="m-tax" value="" min="0" max="20" step="0.01" oninput="render()"><span class="unit">%</span></div>
+            </div>
+            <div class="field">
+              <label>Title, Registration &amp; Other Fees ($)</label>
+              <div class="input-wrap"><input type="number" id="m-fees" value="" min="0" oninput="render()"><span class="unit">$</span></div>
+            </div>
+            <div class="check-row">
+              <input type="checkbox" id="m-rolltax" onchange="render()">
+              <label for="m-rolltax">Include taxes and fees in loan</label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /controls -->
+
+    <!-- RIGHT: RESULTS -->
+    <div class="right">
+
+      <!-- HERO RESULT -->
+      <div class="hero-result">
+        <div class="hero-label" id="hero-label">Monthly Pay:</div>
+        <div class="hero-value" id="hero-value">—</div>
+        <div style="font-size:0.72rem;font-family:'DM Mono',monospace;color:var(--mut)" id="hero-sub"></div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <div class="g4">
+        <div class="card blu"><div class="card-lb">Total Loan Amount</div><div class="card-v" id="st-loan">—</div></div>
+        <div class="card amb"><div class="card-lb">Sale Tax</div><div class="card-v" id="st-tax">—</div></div>
+        <div class="card pur"><div class="card-lb">Upfront Payment</div><div class="card-v" id="st-upfront">—</div></div>
+        <div class="card red"><div class="card-lb">Total Interest</div><div class="card-v" id="st-interest">—</div></div>
+      </div>
+
+      <!-- BREAKDOWN + DONUT -->
+      <div class="g2">
+        <div class="panel">
+          <div class="sect-title">Loan Breakdown</div>
+          <div id="breakdown"></div>
+        </div>
+        <div class="panel" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.75rem">
+          <div style="position:relative;width:200px;height:200px">
+            <canvas id="donut-chart" role="img" aria-label="Loan breakdown donut chart"></canvas>
+          </div>
+          <div id="donut-legend" style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--mut)"></div>
+        </div>
+      </div>
+
+      <!-- AMORTIZATION CHART + TABLE -->
+      <div class="panel">
+        <div class="sect-title">Amortization Schedule</div>
+        <div class="view-bar">
+          <button class="view-btn active" id="vb-annual"  onclick="setView('annual')">Annual Schedule</button>
+          <button class="view-btn"        id="vb-monthly" onclick="setView('monthly')">Monthly Schedule</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start">
+          <div>
+            <div style="position:relative;width:100%;height:240px">
+              <canvas id="amort-chart" role="img" aria-label="Amortization line chart"></canvas>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align:left" id="period-th">Year</th>
+                  <th style="color:#f87171">Interest</th>
+                  <th style="color:#4ade80">Principal</th>
+                  <th>Ending Balance</th>
+                </tr>
+              </thead>
+              <tbody id="amort-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /right -->
+  </div>
+</div>
+
+<div id="print-report" style="display:none"><div id="pr-inner"></div></div>
+
+<script>
+// ============================================================
+// MATH ENGINE
+// Verified exact against reference screenshot:
+// $40k / 5% / 60mo = $754.85, total $45,290.96, interest $5,290.96
+// Upfront = $16,425.00, total cost = $61,715.96
+// Year 1: interest $1,835.98, principal $7,222.21, balance $32,777.79
+// ============================================================
+
+function calcPayment(principal, annualRate, months) {
+  if (principal <= 0) return 0;
+  if (annualRate === 0) return months > 0 ? principal / months : 0;
+  const r = annualRate / 100 / 12;
+  return principal * (r * Math.pow(1+r, months)) / (Math.pow(1+r, months) - 1);
+}
+
+function calcMaxLoan(payment, annualRate, months) {
+  if (payment <= 0 || months <= 0) return 0;
+  if (annualRate === 0) return payment * months;
+  const r = annualRate / 100 / 12;
+  return payment * (Math.pow(1+r, months) - 1) / (r * Math.pow(1+r, months));
+}
+
+function buildAmort(principal, annualRate, months) {
+  if (principal <= 0 || months <= 0) return { payment:0, rows:[] };
+  const r       = annualRate / 100 / 12;
+  const payment = calcPayment(principal, annualRate, months);
+  let   balance = principal;
+  const rows    = [];
+  for (let m = 0; m < months && balance > 0.005; m++) {
+    const interest = balance * r;
+    let   prin     = payment - interest;
+    if (prin > balance) prin = balance;
+    balance = Math.max(0, balance - prin);
+    rows.push({ month: m+1, payment: interest+prin, principal: prin, interest, balance });
+    if (balance < 0.005) break;
+  }
+  return { payment, rows };
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let mode     = 'total';   // 'total' | 'monthly'
+let viewMode = 'annual';  // 'annual' | 'monthly'
+let donutChart = null;
+let amortChart = null;
+
+// ── MODE / VIEW TOGGLES ───────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('mode-total').style.display   = m==='total'   ? 'block':'none';
+  document.getElementById('mode-monthly').style.display = m==='monthly' ? 'block':'none';
+  document.getElementById('btn-total').classList.toggle('active',   m==='total');
+  document.getElementById('btn-monthly').classList.toggle('active', m==='monthly');
+  render();
+}
+
+function setView(v) {
+  viewMode = v;
+  document.getElementById('vb-annual').classList.toggle('active',  v==='annual');
+  document.getElementById('vb-monthly').classList.toggle('active', v==='monthly');
+  document.getElementById('period-th').textContent = v==='annual' ? 'Year' : 'Month';
+  render();
+}
+
+// ── RATE SLIDER SYNC ──────────────────────────────────────
+function onTRateInput()  { document.getElementById('t-rate-slider').value = document.getElementById('t-rate').value; render(); }
+function onTRateSlider() { document.getElementById('t-rate').value = document.getElementById('t-rate-slider').value; render(); }
+function onMRateInput()  { document.getElementById('m-rate-slider').value = document.getElementById('m-rate').value; render(); }
+function onMRateSlider() { document.getElementById('m-rate').value = document.getElementById('m-rate-slider').value; render(); }
+
+function getV(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+// ── MAIN RENDER ───────────────────────────────────────────
+function render() {
+  let loanAmt, monthlyPay, saleTax, upfront, vehiclePrice, term, rate, rollTaxes, fees;
+
+  if (mode === 'total') {
+    const price      = getV('t-price');
+    term             = getV('t-term') || 60;
+    rate             = getV('t-rate');
+    const incentives = getV('t-incentives');
+    const down       = getV('t-down');
+    const tradeIn    = getV('t-tradein');
+    const tradeOwed  = getV('t-tradeowed');
+    const taxRate    = getV('t-tax');
+    fees             = getV('t-fees');
+    rollTaxes        = document.getElementById('t-rolltax').checked;
+    vehiclePrice     = price;
+
+    saleTax = price * taxRate / 100;
+    const netTrade = tradeIn - tradeOwed;
+
+    // Loan = price - down - incentives - positive trade equity + negative trade equity
+    let baseLoan = price - down - incentives - Math.max(0, netTrade) + Math.max(0, -netTrade);
+    if (rollTaxes) baseLoan += saleTax + fees;
+    loanAmt = Math.max(0, baseLoan);
+
+    const { payment, rows } = buildAmort(loanAmt, rate, term);
+    monthlyPay = payment;
+
+    upfront = rollTaxes ? (down + Math.max(0, netTrade)) : (down + Math.max(0, netTrade) + saleTax + fees);
+
+    document.getElementById('hero-label').textContent = 'Monthly Pay:';
+    document.getElementById('hero-value').textContent = fL2(monthlyPay);
+    document.getElementById('hero-sub').textContent   = `${term} payments of ${fL2(monthlyPay)}`;
+
+    const totalPaid     = monthlyPay * rows.length;
+    const totalInterest = rows.reduce((s,r)=>s+r.interest, 0);
+
+    updateCards(loanAmt, saleTax, upfront, totalInterest);
+    updateBreakdown(loanAmt, totalPaid, totalInterest, saleTax, fees, price, term);
+    updateDonut(loanAmt, totalInterest);
+    updateAmortTable(rows);
+
+    // Update net worth
+    updateNetWorth({ car_balances_total: loanAmt });
+
+  } else {
+    // Monthly payment mode — solve for max affordable vehicle price
+    const targetPay = getV('m-payment');
+    term            = getV('m-term') || 60;
+    rate            = getV('m-rate');
+    const down      = getV('m-down');
+    const tradeIn   = getV('m-tradein');
+    const tradeOwed = getV('m-tradeowed');
+    const taxRate   = getV('m-tax');
+    fees            = getV('m-fees');
+    rollTaxes       = document.getElementById('m-rolltax').checked;
+
+    loanAmt      = calcMaxLoan(targetPay, rate, term);
+    monthlyPay   = targetPay;
+    const netTrade = tradeIn - tradeOwed;
+    // Vehicle price = loan + down + net trade equity (simplified: assumes no taxes in loan)
+    vehiclePrice = loanAmt + down + Math.max(0, netTrade);
+    saleTax      = vehiclePrice * taxRate / 100;
+    upfront      = rollTaxes ? (down + Math.max(0, netTrade)) : (down + Math.max(0, netTrade) + saleTax + fees);
+
+    const { rows } = buildAmort(loanAmt, rate, term);
+    const totalInterest = rows.reduce((s,r)=>s+r.interest, 0);
+    const totalPaid     = monthlyPay * rows.length;
+
+    document.getElementById('hero-label').textContent = 'Max Vehicle Price:';
+    document.getElementById('hero-value').textContent = fL2(vehiclePrice);
+    document.getElementById('hero-sub').textContent   = `with ${fL2(targetPay)}/mo · ${term} months`;
+
+    updateCards(loanAmt, saleTax, upfront, totalInterest);
+    updateBreakdown(loanAmt, totalPaid, totalInterest, saleTax, fees, vehiclePrice, term);
+    updateDonut(loanAmt, totalInterest);
+    updateAmortTable(rows);
+
+    updateNetWorth({ car_balances_total: loanAmt });
+  }
+}
+
+function updateCards(loanAmt, saleTax, upfront, totalInterest) {
+  document.getElementById('st-loan').textContent     = fL2(loanAmt);
+  document.getElementById('st-tax').textContent      = fL2(saleTax);
+  document.getElementById('st-upfront').textContent  = fL2(upfront);
+  document.getElementById('st-interest').textContent = fL2(totalInterest);
+}
+
+function updateBreakdown(loanAmt, totalPaid, totalInterest, saleTax, fees, price, term) {
+  document.getElementById('breakdown').innerHTML = `
+    <div class="srow"><span class="srow-lbl">Total Loan Amount</span><span class="srow-val">${fL2(loanAmt)}</span></div>
+    <div class="srow"><span class="srow-lbl">Sale Tax</span><span class="srow-val">${fL2(saleTax)}</span></div>
+    <div class="srow"><span class="srow-lbl">Fees</span><span class="srow-val">${fL2(fees)}</span></div>
+    <div class="srow"><span class="srow-lbl">Total of ${term} Loan Payments</span><span class="srow-val">${fL2(totalPaid)}</span></div>
+    <div class="srow"><span class="srow-lbl">Total Loan Interest</span><span class="srow-val" style="color:var(--red)">${fL2(totalInterest)}</span></div>
+    <div class="srow" style="border-bottom:none;padding-top:0.5rem"><span class="srow-lbl" style="color:var(--txt);font-weight:600">Total Cost (price+int+tax+fees)</span><span class="srow-val" style="font-size:1rem;color:var(--grn)">${fL2(price + totalInterest + saleTax + fees)}</span></div>
+  `;
+}
+
+function updateDonut(loanAmt, totalInterest) {
+  const data   = [loanAmt, totalInterest];
+  const labels = ['Principal','Interest'];
+  const colors = ['#60a5fa','#4ade80'];
+  const total  = loanAmt + totalInterest;
+  if (donutChart) {
+    donutChart.data.datasets[0].data = data;
+    donutChart.update('none');
+  } else {
+    donutChart = new Chart(document.getElementById('donut-chart'), {
+      type: 'doughnut',
+      data: { labels, datasets:[{ data, backgroundColor:colors, borderWidth:0, hoverOffset:4 }] },
+      options: {
+        responsive:true, maintainAspectRatio:false, cutout:'62%',
+        plugins: {
+          legend: { display:false },
+          tooltip: { callbacks:{ label: ctx=>`  ${ctx.label}: ${fL2(ctx.raw)} (${total>0?(ctx.raw/total*100).toFixed(0):0}%)` } }
+        }
+      }
+    });
+  }
+  document.getElementById('donut-legend').innerHTML = labels.map((l,i)=>`
+    <span style="display:flex;align-items:center;gap:4px">
+      <span style="width:8px;height:8px;border-radius:2px;background:${colors[i]};display:inline-block"></span>${l}
+    </span>`).join('');
+}
+
+function updateAmortTable(rows) {
+  // Build annual summary
+  const yearMap = {};
+  rows.forEach(r => {
+    const yr = Math.ceil(r.month / 12);
+    if (!yearMap[yr]) yearMap[yr] = { interest:0, principal:0, balance:0 };
+    yearMap[yr].interest  += r.interest;
+    yearMap[yr].principal += r.principal;
+    yearMap[yr].balance    = r.balance;
+  });
+
+  // Chart data
+  let chartLabels, chartBal, chartInt, chartPrin;
+  if (viewMode === 'annual') {
+    const yrs   = Object.keys(yearMap);
+    chartLabels = yrs.map(y=>'Yr '+y);
+    chartBal    = yrs.map(y=>Math.round(yearMap[y].balance));
+    chartInt    = yrs.map(y=>Math.round(yearMap[y].interest));
+    chartPrin   = yrs.map(y=>Math.round(yearMap[y].principal));
+  } else {
+    chartLabels = rows.map(r=>r.month);
+    chartBal    = rows.map(r=>Math.round(r.balance));
+    chartInt    = rows.map(r=>r.interest);
+    chartPrin   = rows.map(r=>r.principal);
+  }
+
+  if (amortChart) {
+    amortChart.data.labels = chartLabels;
+    amortChart.data.datasets[0].data = chartBal;
+    amortChart.data.datasets[1].data = chartInt;
+    amortChart.data.datasets[2].data = chartPrin;
+    amortChart.update('none');
+  } else {
+    amortChart = new Chart(document.getElementById('amort-chart'), {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          { label:'Balance',   data:chartBal,  borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,0.07)', fill:true, tension:0.3, pointRadius:2 },
+          { label:'Interest',  data:chartInt,  borderColor:'#4ade80', fill:false, tension:0.3, pointRadius:0 },
+          { label:'Principal', data:chartPrin, borderColor:'#ef4444', fill:false, tension:0.3, pointRadius:0 },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false, animation:{duration:150},
+        plugins: {
+          legend: { labels:{ color:'#9ca3af', font:{family:'DM Mono',size:10}, boxWidth:10, padding:12 } },
+          tooltip: { callbacks:{ label: ctx=>`  ${ctx.dataset.label}: ${fL2(ctx.raw)}` } }
+        },
+        scales: {
+          x: { ticks:{ color:'#6b7280', font:{family:'DM Mono',size:9}, maxTicksLimit:10 }, grid:{ color:'rgba(255,255,255,0.04)' } },
+          y: { ticks:{ callback:v=>fS(v), color:'#9ca3af', font:{family:'DM Mono',size:10} }, grid:{ color:'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  }
+
+  // Table
+  const tbody = document.getElementById('amort-tbody');
+  tbody.innerHTML = '';
+  if (viewMode === 'annual') {
+    Object.keys(yearMap).forEach(yr => {
+      const yd = yearMap[yr];
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>Year ${yr}</td>
+        <td style="color:#f87171">${fL2(yd.interest)}</td>
+        <td style="color:#4ade80">${fL2(yd.principal)}</td>
+        <td>${fL2(yd.balance)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } else {
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>Month ${r.month}</td>
+        <td style="color:#f87171">${fL2(r.interest)}</td>
+        <td style="color:#4ade80">${fL2(r.principal)}</td>
+        <td>${fL2(r.balance)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────
+const TIDS = ['t-price','t-term','t-rate','t-incentives','t-down','t-tradein','t-tradeowed','t-tax','t-fees'];
+const MIDS = ['m-payment','m-term','m-rate','m-down','m-tradein','m-tradeowed','m-tax','m-fees'];
+
+function doSave() {
+  const state = { _mode: mode, _view: viewMode };
+  [...TIDS,...MIDS].forEach(id => { const el=document.getElementById(id); if(el) state[id]=el.value; });
+  ['t-rolltax','m-rolltax'].forEach(id => { const el=document.getElementById(id); if(el) state[id]=el.checked; });
+  storeSave(KEYS.car, state);
+  showSaveConfirm();
+}
+
+function loadSaved() {
+  const s = storeLoad(KEYS.car);
+  if (!s) return;
+  if (s._mode) setMode(s._mode);
+  if (s._view) setView(s._view);
+  [...TIDS,...MIDS].forEach(id => { const el=document.getElementById(id); if(el&&s[id]!==undefined) el.value=s[id]; });
+  ['t-rolltax','m-rolltax'].forEach(id => { const el=document.getElementById(id); if(el&&s[id]!==undefined) el.checked=s[id]; });
+  // Sync sliders
+  document.getElementById('t-rate-slider').value = document.getElementById('t-rate').value;
+  document.getElementById('m-rate-slider').value = document.getElementById('m-rate').value;
+}
+
+// ── EXPORT PDF ────────────────────────────────────────────
+function doExport() {
+  const C = { dark:'#111827', muted:'#64748b', bg:'#f8fafc', border:'#e2e8f0', grn:'#16a34a', red:'#dc2626', blu:'#2563eb', amb:'#d97706', pur:'#9333ea' };
+  const css = `*{box-sizing:border-box}body{font-family:"Helvetica Neue",Arial,sans-serif;font-size:8.5pt;color:${C.dark}}
+    h1{font-size:15pt;font-weight:700;border-bottom:2px solid ${C.dark};padding-bottom:3mm;margin-bottom:5mm}
+    h2{font-size:9.5pt;font-weight:700;margin:4mm 0 2mm;border-bottom:1px solid ${C.border};padding-bottom:1mm}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}
+    .card{background:${C.bg};border:1px solid ${C.border};border-radius:3px;padding:2.5mm;position:relative;overflow:hidden}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+    .card.blu::before{background:${C.blu}}.card.amb::before{background:${C.amb}}.card.pur::before{background:${C.pur}}.card.red::before{background:${C.red}}
+    .card-lb{font-size:6pt;color:${C.muted};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:1mm}
+    .card-v{font-size:12pt;font-weight:700;letter-spacing:-0.02em}
+    .card.blu .card-v{color:${C.blu}}.card.amb .card-v{color:${C.amb}}.card.pur .card-v{color:${C.pur}}.card.red .card-v{color:${C.red}}
+    .hero{font-size:14pt;font-weight:700;margin-bottom:4mm;color:${C.grn}}
+    .srow{display:flex;justify-content:space-between;border-bottom:0.5px solid ${C.border};padding:1.5mm 0;font-size:8pt}
+    .srow-lbl{color:${C.muted}}.srow-val{font-weight:600}
+    table{width:100%;border-collapse:collapse;font-size:7.5pt}
+    th{text-align:right;padding:1.5mm 2mm;border-bottom:1px solid ${C.dark};color:${C.muted};font-size:6.5pt;text-transform:uppercase;font-weight:600}
+    th:first-child{text-align:left}
+    td{text-align:right;padding:1.5mm 2mm;border-bottom:0.4px solid ${C.border}}
+    td:first-child{text-align:left;color:${C.muted}}`;
+
+  document.getElementById('pr-inner').innerHTML = `<style>${css}</style>
+    <h1>Car Loan Calculator Report</h1>
+    <div class="hero">${document.getElementById('hero-label').textContent} ${document.getElementById('hero-value').textContent}</div>
+    <div class="g4">
+      <div class="card blu"><div class="card-lb">Total Loan</div><div class="card-v">${document.getElementById('st-loan').textContent}</div></div>
+      <div class="card amb"><div class="card-lb">Sale Tax</div><div class="card-v">${document.getElementById('st-tax').textContent}</div></div>
+      <div class="card pur"><div class="card-lb">Upfront</div><div class="card-v">${document.getElementById('st-upfront').textContent}</div></div>
+      <div class="card red"><div class="card-lb">Total Interest</div><div class="card-v">${document.getElementById('st-interest').textContent}</div></div>
+    </div>
+    <h2>Loan Breakdown</h2>
+    ${document.getElementById('breakdown').innerHTML}
+    <h2 style="page-break-before:always">Amortization Schedule</h2>
+    ${document.querySelector('table').outerHTML}`;
+  window.print();
+}
+
+// ── INIT ─────────────────────────────────────────────────
+loadSaved();
+render();
+</script>
+</body>
+</html>
